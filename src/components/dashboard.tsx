@@ -901,6 +901,20 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
     }
   }
 
+  async function deleteEvent(event: EventItem) {
+    if (!window.confirm(`Delete "${event.name}" permanently? This cannot be undone.`)) return;
+    setEventActionId(event._id);
+    try {
+      await api(`/api/events/${event._id}`, { method: "DELETE" });
+      notify("Sponsored item deleted.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to delete the sponsored item.", "bad");
+    } finally {
+      setEventActionId("");
+    }
+  }
+
   async function duplicateEvent(event: EventItem) {
     setEventActionId(event._id);
     try {
@@ -1065,6 +1079,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                 ) : (
                   <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void updateEventStatus(event._id, "closed")}>Close item</ActionButton>
                 )}
+                <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void deleteEvent(event)}>Delete</ActionButton>
               </div>
             </form>
           </details>
