@@ -791,7 +791,15 @@ function dateTimeFromForm(form: FormData) {
 function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const [ticketTypes, setTicketTypes] = useState("Regular, VIP");
   const [creating, setCreating] = useState(false);
+  const [eventActionId, setEventActionId] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
   const [formError, setFormError] = useState("");
+  const filteredEvents = events.filter((event) =>
+    [event.name, event.venue, event.city, event.market, event.status, event.eventKind, event.sponsorshipName]
+      .join(" ")
+      .toLowerCase()
+      .includes(eventSearch.toLowerCase()),
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -832,28 +840,77 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
 
   async function updateEvent(id: string, form: HTMLFormElement) {
     const data = new FormData(form);
-    await api(`/api/events/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        name: data.get("name"),
-        eventKind: data.get("eventKind"),
-        sponsorshipName: data.get("sponsorshipName"),
-        sponsorshipTier: data.get("sponsorshipTier"),
-        market: data.get("market"),
-        venue: data.get("venue"),
-        city: data.get("city"),
-        startsAt: dateTimeFromForm(data),
-        status: data.get("status"),
-        maxTicketsPerOutlet: data.get("maxTicketsPerOutlet"),
-        description: data.get("description"),
-        ticketTypes: String(data.get("ticketTypes") || "")
-          .split(",")
-          .map((name) => ({ name: name.trim(), active: true }))
-          .filter((type) => type.name),
-      }),
-    });
-    notify("Sponsored event or festival updated.");
-    await onDone();
+    setEventActionId(id);
+    try {
+      await api(`/api/events/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: data.get("name"),
+          eventKind: data.get("eventKind"),
+          sponsorshipName: data.get("sponsorshipName"),
+          sponsorshipTier: data.get("sponsorshipTier"),
+          market: data.get("market"),
+          venue: data.get("venue"),
+          city: data.get("city"),
+          startsAt: dateTimeFromForm(data),
+          status: data.get("status"),
+          maxTicketsPerOutlet: data.get("maxTicketsPerOutlet"),
+          description: data.get("description"),
+          ticketTypes: String(data.get("ticketTypes") || "")
+            .split(",")
+            .map((name) => ({ name: name.trim(), active: true }))
+            .filter((type) => type.name),
+        }),
+      });
+      notify("Sponsored event or festival updated.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update the sponsored item.", "bad");
+    } finally {
+      setEventActionId("");
+    }
+  }
+
+  async function updateEventStatus(id: string, status: EventStatus) {
+    setEventActionId(id);
+    try {
+      await api(`/api/events/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      notify(status === "closed" ? "Sponsored item closed." : "Sponsored item published.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update the sponsored item status.", "bad");
+    } finally {
+      setEventActionId("");
+    }
+  }
+
+  async function duplicateEvent(event: EventItem) {
+    setEventActionId(event._id);
+    try {
+      await api("/api/events", {
+        method: "POST",
+        body: JSON.stringify({
+          name: `${event.name} copy`,
+          eventKind: event.eventKind || "event",
+          sponsorshipName: event.sponsorshipName,
+          sponsorshipTier: event.sponsorshipTier,
+          market: event.market,
+          venue: event.venue,
+          city: event.city,
+          startsAt: event.startsAt,
+          status: "draft",
+          maxTicketsPerOutlet: event.maxTicketsPerOutlet,
+          description: event.description,
+          ticketTypes: event.ticketTypes.map((type) => ({ name: type.name, active: type.active })),
+        }),
+      });
+      notify("Sponsored item duplicated as a draft.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to duplicate the sponsored item.", "bad");
+    } finally {
+      setEventActionId("");
+    }
   }
 
   return (
@@ -917,8 +974,16 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           description="Open an item to adjust its status, ticket types, outlet rule, and sponsorship details."
           meta={<CountPill label="Items" value={events.length} />}
         />
+        <div className="border-b border-stone-200 p-4">
+          <Field label="Search events and festivals">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 text-stone-400" size={16} />
+              <input value={eventSearch} onChange={(event) => setEventSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search name, city, market, status" />
+            </div>
+          </Field>
+        </div>
         <div className="divide-y">
-        {events.map((event) => (
+        {filteredEvents.map((event) => (
           <details key={event._id} className="p-4">
             <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3">
               <div>
@@ -975,11 +1040,19 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
               </div>
               <Field label="Ticket types"><input name="ticketTypes" defaultValue={event.ticketTypes.map((type) => type.name).join(", ")} className={inputClass} /></Field>
               <Field label="Description"><textarea name="description" defaultValue={event.description} className={inputClass} rows={3} /></Field>
-              <ActionButton variant="secondary">Save sponsored item</ActionButton>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton variant="secondary" disabled={eventActionId === event._id}>{eventActionId === event._id ? "Saving..." : "Save sponsored item"}</ActionButton>
+                <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void duplicateEvent(event)}>Duplicate</ActionButton>
+                {event.status === "closed" ? (
+                  <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void updateEventStatus(event._id, "published")}>Publish again</ActionButton>
+                ) : (
+                  <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void updateEventStatus(event._id, "closed")}>Close item</ActionButton>
+                )}
+              </div>
             </form>
           </details>
         ))}
-        {events.length === 0 && <div className="p-4"><EmptyState text="No sponsored events or festivals have been created yet." /></div>}
+        {filteredEvents.length === 0 && <div className="p-4"><EmptyState text={events.length === 0 ? "No sponsored events or festivals have been created yet." : "No sponsored items match the current search."} /></div>}
         </div>
       </div>
     </div>
@@ -987,38 +1060,77 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
 }
 
 function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
-  const pending = outlets.filter((outlet) => outlet.status === "pending");
-  const approved = outlets.filter((outlet) => outlet.status === "approved");
-  const archived = outlets.filter((outlet) => outlet.status === "archived");
+  const [submitting, setSubmitting] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
+  const [outletSearch, setOutletSearch] = useState("");
+  const [formError, setFormError] = useState("");
+  const visibleOutlets = outlets.filter((outlet) =>
+    [outlet.name, outlet.type, outlet.city, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
+  );
+  const pending = visibleOutlets.filter((outlet) => outlet.status === "pending");
+  const approved = visibleOutlets.filter((outlet) => outlet.status === "approved");
+  const archived = visibleOutlets.filter((outlet) => outlet.status === "archived");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await api("/api/outlets", {
-      method: "POST",
-      body: JSON.stringify({ name: form.get("name"), type: form.get("type"), city: form.get("city"), status: "approved" }),
-    });
-    event.currentTarget.reset();
-    notify("Outlet added.");
-    await onDone();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setSubmitting(true);
+    setFormError("");
+    try {
+      await api("/api/outlets", {
+        method: "POST",
+        body: JSON.stringify({ name: form.get("name"), type: form.get("type"), city: form.get("city"), status: "approved" }),
+      });
+      formElement.reset();
+      notify("Outlet added.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to add the outlet.";
+      setFormError(message);
+      notify(message, "bad");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function setStatus(id: string, status: OutletStatus) {
-    await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
-    notify(status === "approved" ? "Outlet approved." : "Outlet archived.");
-    await onDone();
+    setBusyAction(`${id}:status`);
+    try {
+      await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      notify(status === "approved" ? "Outlet approved." : "Outlet archived.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update the outlet status.", "bad");
+    } finally {
+      setBusyAction("");
+    }
   }
 
   async function updateOutlet(id: string, payload: Partial<Outlet>) {
-    await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
-    notify("Outlet updated.");
-    await onDone();
+    setBusyAction(`${id}:save`);
+    try {
+      await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      notify("Outlet updated.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update the outlet.", "bad");
+    } finally {
+      setBusyAction("");
+    }
   }
 
   async function mergeOutlet(id: string, targetOutletId: string) {
-    await api(`/api/outlets/${id}`, { method: "POST", body: JSON.stringify({ targetOutletId }) });
-    notify("Outlet merged and request history preserved.");
-    await onDone();
+    setBusyAction(`${id}:merge`);
+    try {
+      await api(`/api/outlets/${id}`, { method: "POST", body: JSON.stringify({ targetOutletId }) });
+      notify("Outlet merged and request history preserved.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to merge the outlet.", "bad");
+    } finally {
+      setBusyAction("");
+    }
   }
 
   return (
@@ -1032,17 +1144,26 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
         <Field label="Name"><input name="name" required className={inputClass} /></Field>
         <Field label="Type"><input name="type" placeholder="Bar, restaurant, club" className={inputClass} /></Field>
         <Field label="City"><input name="city" className={inputClass} /></Field>
-        <ActionButton>Add outlet</ActionButton>
+        {formError && <Notice message={formError} tone="bad" />}
+        <ActionButton disabled={submitting}>{submitting ? "Adding outlet..." : "Add outlet"}</ActionButton>
       </form>
       <div className="space-y-4">
+        <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+          <Field label="Search outlets">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 text-stone-400" size={16} />
+              <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search name, city, type, or status" />
+            </div>
+          </Field>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <CountPill label="Pending" value={pending.length} />
           <CountPill label="Approved" value={approved.length} />
           <CountPill label="Archived" value={archived.length} />
         </div>
-        <OutletGroup title="Pending proposed outlets" outlets={pending} allOutlets={outlets} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Review outlets proposed by account managers before they become selectable." />
-        <OutletGroup title="Approved outlets" outlets={approved} allOutlets={outlets} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Approved outlets are available in the account manager request flow." />
-        {archived.length > 0 && <OutletGroup title="Archived outlets" outlets={archived} allOutlets={outlets} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Archived outlets stay in history but are removed from normal selection." />}
+        <OutletGroup title="Pending proposed outlets" outlets={pending} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Review outlets proposed by account managers before they become selectable." />
+        <OutletGroup title="Approved outlets" outlets={approved} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Approved outlets are available in the account manager request flow." />
+        {archived.length > 0 && <OutletGroup title="Archived outlets" outlets={archived} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Archived outlets stay in history but are removed from normal selection." />}
       </div>
     </div>
   );
@@ -1052,6 +1173,7 @@ function OutletGroup({
   title,
   outlets,
   allOutlets,
+  busyAction,
   onStatus,
   onUpdate,
   onMerge,
@@ -1060,6 +1182,7 @@ function OutletGroup({
   title: string;
   outlets: Outlet[];
   allOutlets: Outlet[];
+  busyAction: string;
   onStatus: (id: string, status: OutletStatus) => Promise<void>;
   onUpdate: (id: string, payload: Partial<Outlet>) => Promise<void>;
   onMerge: (id: string, targetOutletId: string) => Promise<void>;
@@ -1108,9 +1231,9 @@ function OutletGroup({
                 </select>
               </Field>
               <div className="flex items-end gap-2">
-                <ActionButton variant="secondary">Save outlet</ActionButton>
-                {outlet.status !== "approved" && <ActionButton type="button" variant="ghost" onClick={() => void onStatus(outlet._id, "approved")}>Approve</ActionButton>}
-                {outlet.status !== "archived" && <ActionButton type="button" variant="ghost" onClick={() => void onStatus(outlet._id, "archived")}>Archive</ActionButton>}
+                <ActionButton variant="secondary" disabled={busyAction === `${outlet._id}:save`}>{busyAction === `${outlet._id}:save` ? "Saving..." : "Save outlet"}</ActionButton>
+                {outlet.status !== "approved" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "approved")}>Approve</ActionButton>}
+                {outlet.status !== "archived" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "archived")}>Archive</ActionButton>}
               </div>
               <div className="grid gap-2 md:col-span-3 md:grid-cols-[1fr_auto]">
                 <select
@@ -1123,8 +1246,8 @@ function OutletGroup({
                     <option key={item._id} value={item._id}>{item.name} - {item.city || "No city"}</option>
                   ))}
                 </select>
-                <ActionButton type="button" variant="secondary" disabled={!mergeTargets[outlet._id]} onClick={() => void onMerge(outlet._id, mergeTargets[outlet._id])}>
-                  Merge
+                <ActionButton type="button" variant="secondary" disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`} onClick={() => void onMerge(outlet._id, mergeTargets[outlet._id])}>
+                  {busyAction === `${outlet._id}:merge` ? "Merging..." : "Merge"}
                 </ActionButton>
               </div>
             </form>
@@ -1149,25 +1272,48 @@ function UsersPanel({
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [busyEmail, setBusyEmail] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [formError, setFormError] = useState("");
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const response = await api<{ delivery?: { status: string } }>("/api/admin/users", {
-      method: "POST",
-      body: JSON.stringify({ email: form.get("email"), role: form.get("role") }),
-    });
-    event.currentTarget.reset();
-    notify(`User access updated. Notification ${response.delivery?.status || "skipped"}.`);
-    await onDone();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setSubmitting(true);
+    setFormError("");
+    try {
+      const response = await api<{ delivery?: { status: string } }>("/api/admin/users", {
+        method: "POST",
+        body: JSON.stringify({ email: form.get("email"), role: form.get("role") }),
+      });
+      formElement.reset();
+      notify(`User access updated. Notification ${response.delivery?.status || "skipped"}.`);
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update user access.";
+      setFormError(message);
+      notify(message, "bad");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function updateUser(email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) {
-    await api(`/api/admin/users/${encodeURIComponent(email)}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    notify("User updated.");
-    await onDone();
+    setBusyEmail(email);
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(email)}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      notify("User updated.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update the user.", "bad");
+    } finally {
+      setBusyEmail("");
+    }
   }
 
   const allowedMap = new Map(users.allowedUsers.map((user) => [user.email, user]));
@@ -1186,6 +1332,9 @@ function UsersPanel({
       };
     })
     .sort((a, b) => a.email.localeCompare(b.email));
+  const visibleRows = combinedRows.filter((row) =>
+    [row.email, row.role, row.status, row.source].join(" ").toLowerCase().includes(userSearch.toLowerCase()),
+  );
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(300px,360px)_1fr]">
@@ -1202,11 +1351,20 @@ function UsersPanel({
             <option value="super_admin">Manager</option>
           </select>
         </Field>
-        <ActionButton>Enable access</ActionButton>
+        {formError && <Notice message={formError} tone="bad" />}
+        <ActionButton disabled={submitting}>{submitting ? "Saving access..." : "Enable access"}</ActionButton>
       </form>
       <div className="space-y-5">
         <AccessRequestQueue requests={users.accountRequests} onDone={onDone} notify={notify} />
-        <UserTable title="Users and access" rows={combinedRows} onUpdate={updateUser} />
+        <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+          <Field label="Search users">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 text-stone-400" size={16} />
+              <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search email, role, status, source" />
+            </div>
+          </Field>
+        </div>
+        <UserTable title="Users and access" rows={visibleRows} busyEmail={busyEmail} onUpdate={updateUser} />
       </div>
     </div>
   );
@@ -1222,22 +1380,34 @@ function AccessRequestQueue({
   notify: (message: string, tone?: Tone) => void;
 }) {
   const [notesById, setNotesById] = useState<Record<string, string>>({});
+  const [busyRequestId, setBusyRequestId] = useState("");
+  const [reviewError, setReviewError] = useState("");
   const pending = requests.filter((request) => request.status === "pending");
   const reviewed = requests.filter((request) => request.status !== "pending");
 
   async function review(id: string, status: "approved" | "rejected") {
-    const response = await api<{ accountRequest: AccountRequest }>(`/api/account-requests/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status, reviewNotes: notesById[id] || "" }),
-    });
-    const lastNotification = response.accountRequest.notifications?.at(-1);
-    const notificationText = lastNotification ? ` Notification ${lastNotification.status}.` : "";
-    notify(
-      status === "approved"
-        ? `Account approved.${notificationText}`
-        : `Access request rejected.${notificationText}`,
-    );
-    await onDone();
+    setBusyRequestId(id);
+    setReviewError("");
+    try {
+      const response = await api<{ accountRequest: AccountRequest }>(`/api/account-requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, reviewNotes: notesById[id] || "" }),
+      });
+      const lastNotification = response.accountRequest.notifications?.at(-1);
+      const notificationText = lastNotification ? ` Notification ${lastNotification.status}.` : "";
+      notify(
+        status === "approved"
+          ? `Account approved.${notificationText}`
+          : `Access request rejected.${notificationText}`,
+      );
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to review the account request.";
+      setReviewError(message);
+      notify(message, "bad");
+    } finally {
+      setBusyRequestId("");
+    }
   }
 
   return (
@@ -1245,6 +1415,7 @@ function AccessRequestQueue({
       <div className="border-b p-4">
         <h2 className="font-semibold">Account requests</h2>
         <p className="mt-1 text-sm text-stone-600">Approve access requests submitted from the login screen.</p>
+        {reviewError && <div className="mt-3"><Notice message={reviewError} tone="bad" /></div>}
       </div>
       <div className="divide-y">
         {pending.map((request) => (
@@ -1268,8 +1439,10 @@ function AccessRequestQueue({
               />
             </Field>
             <div className="flex flex-wrap gap-2">
-              <ActionButton onClick={() => void review(request._id, "approved")}>Approve account</ActionButton>
-              <ActionButton variant="secondary" onClick={() => void review(request._id, "rejected")}>Reject</ActionButton>
+              <ActionButton disabled={busyRequestId === request._id} onClick={() => void review(request._id, "approved")}>
+                {busyRequestId === request._id ? "Reviewing..." : "Approve account"}
+              </ActionButton>
+              <ActionButton variant="secondary" disabled={busyRequestId === request._id} onClick={() => void review(request._id, "rejected")}>Reject</ActionButton>
             </div>
           </div>
         ))}
@@ -1327,7 +1500,7 @@ function NotificationList({ notifications }: { notifications: NotificationRecord
   );
 }
 
-function UserTable({ title, rows, onUpdate }: { title: string; rows: AdminUserRow[]; onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void> }) {
+function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: AdminUserRow[]; busyEmail: string; onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void> }) {
   return (
     <div className="rounded-md border border-stone-250 bg-white shadow-sm">
       <div className="border-b p-4"><h2 className="font-semibold">{title}</h2></div>
@@ -1343,6 +1516,7 @@ function UserTable({ title, rows, onUpdate }: { title: string; rows: AdminUserRo
               <select
                 className={inputClass}
                 value={user.role}
+                disabled={busyEmail === user.email}
                 onChange={(event) => void onUpdate(user.email, { role: event.target.value as Role, accessEnabled: true })}
               >
                 <option value="account_manager">Account manager</option>
@@ -1354,13 +1528,13 @@ function UserTable({ title, rows, onUpdate }: { title: string; rows: AdminUserRo
               <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Approval missing"}</Badge>
             </div>
             <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-              <ActionButton variant="secondary" onClick={() => void onUpdate(user.email, { status: user.status === "blocked" ? "active" : "blocked" })}>
-                {user.status === "blocked" ? "Unblock" : "Block"}
+              <ActionButton variant="secondary" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { status: user.status === "blocked" ? "active" : "blocked" })}>
+                {busyEmail === user.email ? "Updating..." : user.status === "blocked" ? "Unblock" : "Block"}
               </ActionButton>
               {user.accessEnabled ? (
-                <ActionButton variant="ghost" onClick={() => void onUpdate(user.email, { accessEnabled: false })}>Disable access</ActionButton>
+                <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: false })}>Disable access</ActionButton>
               ) : (
-                <ActionButton variant="ghost" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
+                <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
               )}
             </div>
           </div>
@@ -1377,6 +1551,8 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
   const [eventId, setEventId] = useState("");
   const [useNewOutlet, setUseNewOutlet] = useState(false);
   const [outletSearch, setOutletSearch] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const effectiveEventId = eventId || published[0]?._id || "";
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
@@ -1395,25 +1571,36 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (blockedReason) return notify(blockedReason, "bad");
-    const form = new FormData(event.currentTarget);
-    await api("/api/requests", {
-      method: "POST",
-      body: JSON.stringify({
-        eventId: form.get("eventId"),
-        outletId: useNewOutlet ? undefined : form.get("outletId"),
-        newOutlet: useNewOutlet
-          ? { name: form.get("newOutletName"), type: form.get("newOutletType"), city: form.get("newOutletCity") }
-          : undefined,
-        recipientEmails: form.get("recipientEmails"),
-        items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
-        notes: form.get("notes"),
-      }),
-    });
-    event.currentTarget.reset();
-    setOutletSearch("");
-    setUseNewOutlet(false);
-    notify("Request submitted for manager review.");
-    await onDone();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setSubmitting(true);
+    setFormError("");
+    try {
+      await api("/api/requests", {
+        method: "POST",
+        body: JSON.stringify({
+          eventId: form.get("eventId"),
+          outletId: useNewOutlet ? undefined : form.get("outletId"),
+          newOutlet: useNewOutlet
+            ? { name: form.get("newOutletName"), type: form.get("newOutletType"), city: form.get("newOutletCity") }
+            : undefined,
+          recipientEmails: form.get("recipientEmails"),
+          items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
+          notes: form.get("notes"),
+        }),
+      });
+      formElement.reset();
+      setOutletSearch("");
+      setUseNewOutlet(false);
+      notify("Request submitted for manager review.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to submit the request.";
+      setFormError(message);
+      notify(message, "bad");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -1498,7 +1685,8 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
             The manager will review this request, update the final status, and send ticket files by email attachment.
           </p>
           {blockedReason && <Notice message={blockedReason} tone="bad" />}
-          <ActionButton disabled={Boolean(blockedReason)}>Submit request</ActionButton>
+          {formError && <Notice message={formError} tone="bad" />}
+          <ActionButton disabled={Boolean(blockedReason) || submitting}>{submitting ? "Submitting request..." : "Submit request"}</ActionButton>
         </div>
       </Step>
       </div>
@@ -1645,44 +1833,39 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
         <div className="border-b border-stone-200 px-4 py-3">
           <h2 className="text-lg font-semibold">Account manager breakdown</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b bg-stone-50 text-xs uppercase tracking-[0.12em] text-stone-500">
-              <tr>
-                <th className="px-4 py-3">Account manager</th>
-                <th>Requests</th>
-                <th>Tickets</th>
-                <th>Approved</th>
-                <th>Pending</th>
-                <th>Rejected</th>
-                <th>Outlets</th>
-                <th>Events/Festivals</th>
-                <th>Latest</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((row) => (
-                <tr key={row.email}>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{row.name}</p>
-                    <p className="text-xs text-stone-500">{row.email}</p>
-                  </td>
-                  <td>{row.requests}</td>
-                  <td>{row.tickets}</td>
-                  <td>{row.approved}</td>
-                  <td>{row.pending}</td>
-                  <td>{row.rejected}</td>
-                  <td className="max-w-[220px] text-stone-600">{mapSummary(row.outlets, "No outlets")}</td>
-                  <td className="max-w-[220px] text-stone-600">{mapSummary(row.events, "No events")}</td>
-                  <td>{row.latestRequest ? formatShortDate(row.latestRequest) : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="divide-y">
+          {rows.map((row) => (
+            <article key={row.email} className="grid gap-3 p-4 text-sm xl:grid-cols-[1.2fr_1fr]">
+              <div>
+                <p className="font-medium">{row.name}</p>
+                <p className="break-words text-xs text-stone-500">{row.email}</p>
+                <p className="mt-2 text-xs text-stone-500">Latest request: {row.latestRequest ? formatShortDate(row.latestRequest) : "-"}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <MiniMetric label="Requests" value={row.requests} />
+                <MiniMetric label="Tickets" value={row.tickets} />
+                <MiniMetric label="Approved" value={row.approved} />
+                <MiniMetric label="Pending" value={row.pending} />
+                <MiniMetric label="Rejected" value={row.rejected} />
+                <MiniMetric label="Outlets" value={row.outlets.size} />
+              </div>
+              <p className="text-stone-600 xl:col-span-2">Outlets: {mapSummary(row.outlets, "No outlets")}</p>
+              <p className="text-stone-600 xl:col-span-2">Events/Festivals: {mapSummary(row.events, "No events")}</p>
+            </article>
+          ))}
         </div>
         {rows.length === 0 && <EmptyState text="No account manager statistics are available yet." />}
       </div>
     </section>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-stone-200 bg-stone-50 p-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-500">{label}</p>
+      <p className="mt-1 text-lg font-semibold">{value}</p>
+    </div>
   );
 }
 
@@ -1722,6 +1905,9 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
   const [status, setStatus] = useState<RequestStatus>(request.status);
   const [adminNotes, setAdminNotes] = useState(request.adminNotes || "");
   const [recipients, setRecipients] = useState(request.recipientEmails.join(", "));
+  const [updating, setUpdating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [approvedByIndex, setApprovedByIndex] = useState<Record<number, number>>(() =>
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
@@ -1741,21 +1927,34 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     if (status === "partially_approved" && (approvedTotal <= 0 || approvedTotal >= requestedTotal)) {
       return notify("Partial approval must approve at least one ticket but less than requested.", "bad");
     }
-    await api(`/api/requests/${request._id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status,
-        adminNotes,
-        recipientEmails: splitEmails(recipients),
-        items: nextItems,
-      }),
-    });
-    notify("Request updated.");
-    await onDone();
+    setUpdating(true);
+    setActionError("");
+    try {
+      await api(`/api/requests/${request._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status,
+          adminNotes,
+          recipientEmails: splitEmails(recipients),
+          items: nextItems,
+        }),
+      });
+      notify("Request updated.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update the request.";
+      setActionError(message);
+      notify(message, "bad");
+    } finally {
+      setUpdating(false);
+    }
   }
 
   async function sendTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (request.status !== "approved" && request.status !== "partially_approved") {
+      return notify("Approve or partially approve the request before sending ticket files.", "bad");
+    }
     const form = new FormData(event.currentTarget);
     const recipientList = splitEmails(String(form.get("recipients") || ""));
     const files = form.getAll("files").filter((file): file is File => file instanceof File && file.size > 0);
@@ -1766,11 +1965,21 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
 
   async function confirmSendTicket() {
     if (!pendingSend) return;
-    await api<{ delivery: { status: string } }>(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
-    pendingSend.form.reset();
-    setPendingSend(null);
-    notify("Ticket email sent or simulated. Check dispatch history for details.");
-    await onDone();
+    setSending(true);
+    setActionError("");
+    try {
+      await api<{ delivery: { status: string } }>(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
+      pendingSend.form.reset();
+      setPendingSend(null);
+      notify("Ticket email sent or simulated. Check dispatch history for details.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send the ticket email.";
+      setActionError(message);
+      notify(message, "bad");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -1793,6 +2002,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
       </summary>
 
       <div className="mt-4 grid gap-4 border-t border-stone-200 pt-4">
+        {actionError && <Notice message={actionError} tone="bad" />}
         {request.notes && <p className="rounded-md bg-stone-100 p-3 text-sm text-stone-700">{request.notes}</p>}
 
         <section className="rounded-md border border-stone-200 bg-stone-50 p-3">
@@ -1840,10 +2050,15 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           <Field label="Admin notes">
             <input className={inputClass} value={adminNotes} onChange={(event) => setAdminNotes(event.target.value)} />
           </Field>
-          <ActionButton className="mt-6" variant="secondary" onClick={update}>Save</ActionButton>
+          <ActionButton className="mt-6" variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
         </div>
 
         <form onSubmit={sendTicket} className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 lg:grid-cols-2">
+          {request.status !== "approved" && request.status !== "partially_approved" && (
+            <div className="lg:col-span-2">
+              <Notice message="Ticket files can be sent only after the request is approved or partially approved." tone="warn" />
+            </div>
+          )}
           <Field label="Email recipients">
             <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
           </Field>
@@ -1857,7 +2072,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
             <input name="files" type="file" multiple required className={inputClass} />
           </Field>
           <div className="lg:col-span-2">
-            <ActionButton><Send size={16} /> Send ticket email</ActionButton>
+            <ActionButton disabled={request.status !== "approved" && request.status !== "partially_approved"}><Send size={16} /> Send ticket email</ActionButton>
           </div>
         </form>
 
@@ -1870,8 +2085,8 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
                 Send {pendingSend.fileCount} attachment(s) to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
               </p>
               <div className="mt-4 flex flex-wrap justify-end gap-2">
-                <ActionButton variant="ghost" onClick={() => setPendingSend(null)}>Cancel</ActionButton>
-                <ActionButton onClick={() => void confirmSendTicket()}>Confirm send</ActionButton>
+                <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
+                <ActionButton disabled={sending} onClick={() => void confirmSendTicket()}>{sending ? "Sending..." : "Confirm send"}</ActionButton>
               </div>
             </div>
           </div>
@@ -1925,6 +2140,13 @@ function DispatchList({ dispatches }: { dispatches: TicketRequest["dispatches"] 
 }
 
 function MinePanel({ requests }: { requests: TicketRequest[] }) {
+  const nextStep = (request: TicketRequest) => {
+    if (request.status === "pending") return "Next: a manager reviews the outlet, quantities, recipients, and notes.";
+    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: the manager can now send ticket files by email.";
+    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: the manager can now send the available tickets.";
+    return "Rejected: review the manager note before creating a corrected request.";
+  };
+
   return (
     <div className="space-y-4">
       {requests.map((request) => (
@@ -1938,6 +2160,7 @@ function MinePanel({ requests }: { requests: TicketRequest[] }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">{request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}</div>
           {request.adminNotes && <p className="mt-3 rounded-md bg-stone-100 p-3 text-sm">{request.adminNotes}</p>}
+          <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">{nextStep(request)}</p>
           <p className="mt-3 text-sm text-stone-600">Ticket files are sent by email from the manager to the agreed recipients.</p>
         </article>
       ))}
@@ -1956,6 +2179,8 @@ function ReportsPanel() {
   const [auditActor, setAuditActor] = useState("");
   const [auditAction, setAuditAction] = useState("");
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: Tone } | null>(null);
+  const [exporting, setExporting] = useState<"csv" | "pdf" | "">("");
+  const [loadingReport, setLoadingReport] = useState(false);
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
@@ -1980,8 +2205,15 @@ function ReportsPanel() {
 
   const load = useCallback(async () => {
     const params = reportParams();
-    const data = await api<{ rows: Record<string, string | number>[] }>(`/api/reports?${params.toString()}`);
-    setRows(data.rows);
+    setLoadingReport(true);
+    try {
+      const data = await api<{ rows: Record<string, string | number>[] }>(`/api/reports?${params.toString()}`);
+      setRows(data.rows);
+    } catch (error) {
+      setExportNotice({ message: error instanceof Error ? error.message : "Unable to load the report.", tone: "bad" });
+    } finally {
+      setLoadingReport(false);
+    }
   }, [reportParams]);
 
   const loadAuditLogs = useCallback(async () => {
@@ -1997,41 +2229,50 @@ function ReportsPanel() {
 
   async function exportPdf() {
     setExportNotice(null);
+    setExporting("pdf");
     try {
       await api(`/api/reports?${reportParams({ export: "pdf" }).toString()}`);
+      const [{ default: jsPDF }, autoTable] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+      const doc = new jsPDF();
+      doc.text("Bacardi Ticket Hub Report", 14, 14);
+      autoTable.default(doc, {
+        head: [["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Status", "Tickets", "Dispatches"]],
+        body: filteredRows.map((row) => [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.status, row.quantity, row.dispatches]),
+        startY: 22,
+      });
+      doc.save("bacardi-ticket-report.pdf");
+      setExportNotice({ message: "PDF exported and audit log updated.", tone: "good" });
+      await loadAuditLogs();
     } catch (error) {
-      setExportNotice({ message: error instanceof Error ? error.message : "Unable to audit the PDF export.", tone: "bad" });
-      return;
+      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
+    } finally {
+      setExporting("");
     }
-    const [{ default: jsPDF }, autoTable] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
-    const doc = new jsPDF();
-    doc.text("Bacardi Ticket Hub Report", 14, 14);
-    autoTable.default(doc, {
-      head: [["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Status", "Tickets", "Dispatches"]],
-      body: filteredRows.map((row) => [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.status, row.quantity, row.dispatches]),
-      startY: 22,
-    });
-    doc.save("bacardi-ticket-report.pdf");
-    setExportNotice({ message: "PDF exported and audit log updated.", tone: "good" });
-    await loadAuditLogs();
   }
 
   async function exportCsv() {
     setExportNotice(null);
-    const response = await fetch(`/api/reports?${reportParams({ format: "csv" }).toString()}`);
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({ error: "Unable to export CSV." }));
-      setExportNotice({ message: payload.error || "Unable to export CSV.", tone: "bad" });
-      return;
+    setExporting("csv");
+    try {
+      const response = await fetch(`/api/reports?${reportParams({ format: "csv" }).toString()}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ error: "Unable to export CSV." }));
+        setExportNotice({ message: payload.error || "Unable to export CSV.", tone: "bad" });
+        return;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "bacardi-ticket-report.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportNotice({ message: "CSV exported and audit log updated.", tone: "good" });
+      await loadAuditLogs();
+    } catch (error) {
+      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export CSV.", tone: "bad" });
+    } finally {
+      setExporting("");
     }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "bacardi-ticket-report.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-    setExportNotice({ message: "CSV exported and audit log updated.", tone: "good" });
-    await loadAuditLogs();
   }
 
   useEffect(() => {
@@ -2060,11 +2301,11 @@ function ReportsPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Request report</h2>
           <div className="flex gap-2">
-            <ActionButton variant="secondary" onClick={() => void exportCsv()}>
-              <Download size={16} /> CSV
+            <ActionButton variant="secondary" disabled={Boolean(exporting)} onClick={() => void exportCsv()}>
+              <Download size={16} /> {exporting === "csv" ? "Exporting CSV..." : "CSV"}
             </ActionButton>
-            <ActionButton variant="secondary" onClick={() => void exportPdf()}>
-              <Download size={16} /> PDF
+            <ActionButton variant="secondary" disabled={Boolean(exporting)} onClick={() => void exportPdf()}>
+              <Download size={16} /> {exporting === "pdf" ? "Exporting PDF..." : "PDF"}
             </ActionButton>
           </div>
         </div>
@@ -2083,12 +2324,13 @@ function ReportsPanel() {
             <input className={inputClass} value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} placeholder="Search event, outlet, market, account manager" />
           </Field>
           <Field label="From">
-            <input className={inputClass} type="text" inputMode="numeric" placeholder="YYYY-MM-DD" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            <input className={inputClass} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </Field>
           <Field label="To">
-            <input className={inputClass} type="text" inputMode="numeric" placeholder="YYYY-MM-DD" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            <input className={inputClass} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </Field>
         </div>
+        {loadingReport && <p className="mt-3 text-sm text-stone-500">Loading report...</p>}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b text-stone-600">

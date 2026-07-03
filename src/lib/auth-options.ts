@@ -14,10 +14,12 @@ const providers: NextAuthOptions["providers"] = [
     async authorize(credentials) {
       const email = normalizeEmail(credentials?.email || "");
       if (!email) return null;
-      const limit = rateLimit(`login:${email}`, 20, 60 * 60 * 1000);
-      if (limit.limited) {
-        console.warn("[auth:rate-limited]", { email });
-        return null;
+      if (process.env.NODE_ENV === "production") {
+        const limit = rateLimit(`login:${email}`, 20, 60 * 60 * 1000);
+        if (limit.limited) {
+          console.warn("[auth:rate-limited]", { email });
+          return null;
+        }
       }
       try {
         const profile = await ensureAllowedProfile(email, email.split("@")[0]);
