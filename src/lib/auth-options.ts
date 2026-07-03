@@ -15,14 +15,26 @@ const providers: NextAuthOptions["providers"] = [
       const email = normalizeEmail(credentials?.email || "");
       if (!email) return null;
       const limit = rateLimit(`login:${email}`, 20, 60 * 60 * 1000);
-      if (limit.limited) return null;
-      const profile = await ensureAllowedProfile(email, email.split("@")[0]);
-      if (!profile) return null;
-      return {
-        id: String(profile._id),
-        email,
-        name: profile.name || email,
-      };
+      if (limit.limited) {
+        console.warn("[auth:rate-limited]", { email });
+        return null;
+      }
+      try {
+        const profile = await ensureAllowedProfile(email, email.split("@")[0]);
+        if (!profile) return null;
+        return {
+          id: String(profile._id),
+          email,
+          name: profile.name || email,
+        };
+      } catch (error) {
+        console.error("[auth:authorize-failed]", {
+          email,
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message : "Authentication failed.",
+        });
+        return null;
+      }
     },
   }),
 ];
@@ -35,8 +47,17 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user }) {
       if (!user.email) return false;
-      const profile = await ensureAllowedProfile(user.email, user.name);
-      return Boolean(profile);
+      try {
+        const profile = await ensureAllowedProfile(user.email, user.name);
+        return Boolean(profile);
+      } catch (error) {
+        console.error("[auth:signin-failed]", {
+          email: user.email,
+          name: error instanceof Error ? error.name : "UnknownError",
+          message: error instanceof Error ? error.message : "Sign in failed.",
+        });
+        return false;
+      }
     },
     async jwt({ token }) {
       if (token.email) {

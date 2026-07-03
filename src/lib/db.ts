@@ -21,6 +21,7 @@ export async function connectDb() {
   cache.promise ??= mongoose.connect(uri, {
     bufferCommands: false,
     dbName: "bacardi-ticket-hub",
+    serverSelectionTimeoutMS: 8000,
   });
 
   cache.conn = await cache.promise;
