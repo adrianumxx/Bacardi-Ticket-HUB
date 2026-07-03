@@ -29,6 +29,7 @@ const providers: NextAuthOptions["providers"] = [
 
 export const authOptions: NextAuthOptions = {
   providers,
+  secret: process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/" },
   callbacks: {

@@ -17,7 +17,16 @@ export async function ensureAllowedProfile(emailValue: string, name?: string | n
   const existingProfile = await Profile.findOne({ email }).lean();
   const role = envAdmins.includes(email) ? "super_admin" : allowed?.role;
 
-  if (!role) return null;
+  if (!role) {
+    console.warn("[auth:access-denied]", {
+      email,
+      isEnvAdmin: envAdmins.includes(email),
+      envAdminCount: envAdmins.length,
+      hasAllowedAccess: Boolean(allowed),
+      hasProfile: Boolean(existingProfile),
+    });
+    return null;
+  }
 
   return Profile.findOneAndUpdate(
     { email },
