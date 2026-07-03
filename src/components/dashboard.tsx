@@ -762,33 +762,66 @@ function CountPill({ label, value }: { label: string; value: number }) {
   );
 }
 
+function dateInputValue(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function timeInputValue(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(11, 16);
+}
+
+function dateTimeFromForm(form: FormData) {
+  const date = String(form.get("startsDate") || "");
+  const time = String(form.get("startsTime") || "");
+  if (!date) return "";
+  return `${date}T${time || "00:00"}`;
+}
+
 function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const [ticketTypes, setTicketTypes] = useState("Regular, VIP");
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setCreating(true);
+    setFormError("");
     const form = new FormData(event.currentTarget);
-    await api("/api/events", {
-      method: "POST",
-      body: JSON.stringify({
-        name: form.get("name"),
-        eventKind: form.get("eventKind"),
-        sponsorshipName: form.get("sponsorshipName"),
-        sponsorshipTier: form.get("sponsorshipTier"),
-        market: form.get("market"),
-        venue: form.get("venue"),
-        city: form.get("city"),
-        startsAt: form.get("startsAt"),
-        status: form.get("status"),
-        maxTicketsPerOutlet: form.get("maxTicketsPerOutlet"),
-        description: form.get("description"),
-        ticketTypes: ticketTypes.split(",").map((name) => ({ name: name.trim(), active: true })).filter((type) => type.name),
-      }),
-    });
-    event.currentTarget.reset();
-    setTicketTypes("Regular, VIP");
-    notify("Sponsored event or festival created.");
-    await onDone();
+    try {
+      await api("/api/events", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.get("name"),
+          eventKind: form.get("eventKind"),
+          sponsorshipName: form.get("sponsorshipName"),
+          sponsorshipTier: form.get("sponsorshipTier"),
+          market: form.get("market"),
+          venue: form.get("venue"),
+          city: form.get("city"),
+          startsAt: dateTimeFromForm(form),
+          status: form.get("status"),
+          maxTicketsPerOutlet: form.get("maxTicketsPerOutlet"),
+          description: form.get("description"),
+          ticketTypes: ticketTypes.split(",").map((name) => ({ name: name.trim(), active: true })).filter((type) => type.name),
+        }),
+      });
+      event.currentTarget.reset();
+      setTicketTypes("Regular, VIP");
+      notify("Sponsored event or festival created.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to create the sponsored item.";
+      setFormError(message);
+      notify(message, "bad");
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function updateEvent(id: string, form: HTMLFormElement) {
@@ -803,7 +836,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         market: data.get("market"),
         venue: data.get("venue"),
         city: data.get("city"),
-        startsAt: data.get("startsAt"),
+        startsAt: dateTimeFromForm(data),
         status: data.get("status"),
         maxTicketsPerOutlet: data.get("maxTicketsPerOutlet"),
         description: data.get("description"),
@@ -843,9 +876,14 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <Field label="Venue"><input name="venue" className={inputClass} /></Field>
           <Field label="City"><input name="city" className={inputClass} /></Field>
         </div>
-        <Field label="Date and time" hint="Use YYYY-MM-DD HH:mm, for example 2026-07-03 18:00.">
-          <input name="startsAt" type="text" inputMode="numeric" placeholder="YYYY-MM-DD HH:mm" className={inputClass} />
-        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Date">
+            <input name="startsDate" type="date" className={inputClass} />
+          </Field>
+          <Field label="Time">
+            <input name="startsTime" type="time" className={inputClass} />
+          </Field>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Status">
             <select name="status" className={inputClass} defaultValue="published">
@@ -862,7 +900,8 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <input value={ticketTypes} onChange={(event) => setTicketTypes(event.target.value)} className={inputClass} />
         </Field>
         <Field label="Description"><textarea name="description" className={inputClass} rows={3} /></Field>
-        <ActionButton>Create sponsored item</ActionButton>
+        {formError && <Notice message={formError} tone="bad" />}
+        <ActionButton disabled={creating}>{creating ? "Creating sponsored item..." : "Create sponsored item"}</ActionButton>
       </form>
 
       <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
@@ -920,15 +959,11 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                 <Field label="Sponsorship role"><input name="sponsorshipTier" defaultValue={event.sponsorshipTier} className={inputClass} /></Field>
                 <Field label="Venue"><input name="venue" defaultValue={event.venue} className={inputClass} /></Field>
                 <Field label="City"><input name="city" defaultValue={event.city} className={inputClass} /></Field>
-                <Field label="Date and time" hint="Use YYYY-MM-DD HH:mm, for example 2026-07-03 18:00.">
-                  <input
-                    name="startsAt"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="YYYY-MM-DD HH:mm"
-                    defaultValue={event.startsAt ? new Date(event.startsAt).toISOString().slice(0, 16).replace("T", " ") : ""}
-                    className={inputClass}
-                  />
+                <Field label="Date">
+                  <input name="startsDate" type="date" defaultValue={dateInputValue(event.startsAt)} className={inputClass} />
+                </Field>
+                <Field label="Time">
+                  <input name="startsTime" type="time" defaultValue={timeInputValue(event.startsAt)} className={inputClass} />
                 </Field>
                 <Field label="Max tickets per outlet"><input name="maxTicketsPerOutlet" type="number" min={1} defaultValue={event.maxTicketsPerOutlet} className={inputClass} /></Field>
               </div>
