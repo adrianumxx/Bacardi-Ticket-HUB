@@ -830,9 +830,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: form.get("name"),
           eventKind: form.get("eventKind"),
-          sponsorshipName: form.get("sponsorshipName"),
-          sponsorshipTier: form.get("sponsorshipTier"),
-          market: form.get("market"),
           venue: form.get("venue"),
           city: form.get("city"),
           startsAt: dateTimeFromForm(form),
@@ -864,9 +861,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: data.get("name"),
           eventKind: data.get("eventKind"),
-          sponsorshipName: data.get("sponsorshipName"),
-          sponsorshipTier: data.get("sponsorshipTier"),
-          market: data.get("market"),
           venue: data.get("venue"),
           city: data.get("city"),
           startsAt: dateTimeFromForm(data),
@@ -923,9 +917,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: `${event.name} copy`,
           eventKind: event.eventKind || "event",
-          sponsorshipName: event.sponsorshipName,
-          sponsorshipTier: event.sponsorshipTier,
-          market: event.market,
           venue: event.venue,
           city: event.city,
           startsAt: event.startsAt,
@@ -952,20 +943,13 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <h2 className="mt-1 text-lg font-semibold">Create sponsored item</h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">Publish the event or festival before account managers can request tickets.</p>
         </div>
-        <Field label="Event or festival name"><input name="name" required className={inputClass} /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Type">
-            <select name="eventKind" className={inputClass} defaultValue="event">
-              <option value="event">Event</option>
-              <option value="festival">Festival</option>
-            </select>
-          </Field>
-          <Field label="Market"><input name="market" placeholder="Italy, Spain, Benelux..." className={inputClass} /></Field>
-        </div>
-        <Field label="Sponsorship name" hint="Example: Bacardi at Tomorrowland, Bacardi backstage experience.">
-          <input name="sponsorshipName" className={inputClass} />
+        <Field label="Event or festival name"><input name="name" required autoFocus className={inputClass} /></Field>
+        <Field label="Type">
+          <select name="eventKind" className={inputClass} defaultValue="event">
+            <option value="event">Event</option>
+            <option value="festival">Festival</option>
+          </select>
         </Field>
-        <Field label="Sponsorship role"><input name="sponsorshipTier" placeholder="Main sponsor, pouring partner, VIP partner..." className={inputClass} /></Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Venue"><input name="venue" className={inputClass} /></Field>
           <Field label="City"><input name="city" className={inputClass} /></Field>
@@ -1056,9 +1040,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                     <option value="festival">Festival</option>
                   </select>
                 </Field>
-                <Field label="Market"><input name="market" defaultValue={event.market} className={inputClass} /></Field>
-                <Field label="Sponsorship name"><input name="sponsorshipName" defaultValue={event.sponsorshipName} className={inputClass} /></Field>
-                <Field label="Sponsorship role"><input name="sponsorshipTier" defaultValue={event.sponsorshipTier} className={inputClass} /></Field>
                 <Field label="Venue"><input name="venue" defaultValue={event.venue} className={inputClass} /></Field>
                 <Field label="City"><input name="city" defaultValue={event.city} className={inputClass} /></Field>
                 <Field label="Date">
