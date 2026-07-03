@@ -790,9 +790,10 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setCreating(true);
     setFormError("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       await api("/api/events", {
         method: "POST",
@@ -811,7 +812,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           ticketTypes: ticketTypes.split(",").map((name) => ({ name: name.trim(), active: true })).filter((type) => type.name),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setTicketTypes("Regular, VIP");
       notify("Sponsored event or festival created.");
       await onDone();
