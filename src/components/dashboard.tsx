@@ -836,10 +836,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
   const [eventSearch, setEventSearch] = useState("");
   const [formError, setFormError] = useState("");
   const filteredEvents = events.filter((event) =>
-    [event.name, event.venue, event.city, event.market, event.status, event.eventKind, event.sponsorshipName]
-      .join(" ")
-      .toLowerCase()
-      .includes(eventSearch.toLowerCase()),
+    [event.name, event.status].join(" ").toLowerCase().includes(eventSearch.toLowerCase()),
   );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -853,13 +850,9 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         method: "POST",
         body: JSON.stringify({
           name: form.get("name"),
-          eventKind: form.get("eventKind"),
-          venue: form.get("venue"),
-          city: form.get("city"),
           startsAt: dateTimeFromForm(form),
           status: form.get("status"),
           maxTicketsPerOutlet: form.get("maxTicketsPerOutlet"),
-          description: form.get("description"),
           ticketTypes: ticketTypes.split(",").map((name) => ({ name: name.trim(), active: true })).filter((type) => type.name),
         }),
       });
@@ -884,13 +877,9 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         method: "PATCH",
         body: JSON.stringify({
           name: data.get("name"),
-          eventKind: data.get("eventKind"),
-          venue: data.get("venue"),
-          city: data.get("city"),
           startsAt: dateTimeFromForm(data),
           status: data.get("status"),
           maxTicketsPerOutlet: data.get("maxTicketsPerOutlet"),
-          description: data.get("description"),
           ticketTypes: String(data.get("ticketTypes") || "")
             .split(",")
             .map((name) => ({ name: name.trim(), active: true }))
@@ -940,13 +929,9 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         method: "POST",
         body: JSON.stringify({
           name: `${event.name} copy`,
-          eventKind: event.eventKind || "event",
-          venue: event.venue,
-          city: event.city,
           startsAt: event.startsAt,
           status: "draft",
           maxTicketsPerOutlet: event.maxTicketsPerOutlet,
-          description: event.description,
           ticketTypes: event.ticketTypes.map((type) => ({ name: type.name, active: type.active })),
         }),
       });
@@ -967,17 +952,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <h2 className="mt-1 text-lg font-semibold">Create sponsored item</h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">Publish the event or festival before account managers can request tickets.</p>
         </div>
-        <Field label="Event or festival name"><input name="name" required autoFocus className={inputClass} /></Field>
-        <Field label="Type">
-          <select name="eventKind" className={inputClass} defaultValue="event">
-            <option value="event">Event</option>
-            <option value="festival">Festival</option>
-          </select>
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Venue"><input name="venue" className={inputClass} /></Field>
-          <Field label="City"><input name="city" className={inputClass} /></Field>
-        </div>
+        <Field label="Event or festival name"><input name="name" required autoFocus placeholder="e.g. Tomorrowland" className={inputClass} /></Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Date">
             <input name="startsDate" type="date" className={inputClass} />
@@ -1001,7 +976,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         <Field label="Ticket types" hint="Comma-separated, for example Regular, VIP, Backstage.">
           <input value={ticketTypes} onChange={(event) => setTicketTypes(event.target.value)} className={inputClass} />
         </Field>
-        <Field label="Description"><textarea name="description" className={inputClass} rows={3} /></Field>
         {formError && <Notice message={formError} tone="bad" />}
         <ActionButton disabled={creating}>{creating ? "Creating sponsored item..." : "Create sponsored item"}</ActionButton>
       </form>
@@ -1027,15 +1001,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
             <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{event.name}</h3>
-                <p className="text-sm text-stone-600">
-                  {event.venue} {event.city ? `- ${event.city}` : ""} - {formatDate(event.startsAt)}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Badge>{event.eventKind === "festival" ? "Festival" : "Event"}</Badge>
-                  {event.market && <Badge>{event.market}</Badge>}
-                  {event.sponsorshipTier && <Badge>{event.sponsorshipTier}</Badge>}
-                </div>
-                {event.sponsorshipName && <p className="mt-2 text-sm font-medium text-stone-700">{event.sponsorshipName}</p>}
+                <p className="text-sm text-stone-600">{formatDate(event.startsAt)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge tone={event.status === "published" ? "good" : event.status === "closed" ? "bad" : "neutral"}>{renderEventStatus(event.status)}</Badge>
@@ -1058,14 +1024,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                     <option value="closed">Closed</option>
                   </select>
                 </Field>
-                <Field label="Type">
-                  <select name="eventKind" defaultValue={event.eventKind || "event"} className={inputClass}>
-                    <option value="event">Event</option>
-                    <option value="festival">Festival</option>
-                  </select>
-                </Field>
-                <Field label="Venue"><input name="venue" defaultValue={event.venue} className={inputClass} /></Field>
-                <Field label="City"><input name="city" defaultValue={event.city} className={inputClass} /></Field>
                 <Field label="Date">
                   <input name="startsDate" type="date" defaultValue={dateInputValue(event.startsAt)} className={inputClass} />
                 </Field>
@@ -1075,7 +1033,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                 <Field label="Max tickets per outlet"><input name="maxTicketsPerOutlet" type="number" min={1} defaultValue={event.maxTicketsPerOutlet} className={inputClass} /></Field>
               </div>
               <Field label="Ticket types"><input name="ticketTypes" defaultValue={event.ticketTypes.map((type) => type.name).join(", ")} className={inputClass} /></Field>
-              <Field label="Description"><textarea name="description" defaultValue={event.description} className={inputClass} rows={3} /></Field>
               <div className="flex flex-wrap gap-2">
                 <ActionButton variant="secondary" disabled={eventActionId === event._id}>{eventActionId === event._id ? "Saving..." : "Save sponsored item"}</ActionButton>
                 <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void duplicateEvent(event)}>Duplicate</ActionButton>
@@ -1679,7 +1636,6 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
           {selectedEvent && (
             <div className="space-y-1 rounded-md bg-stone-100 p-3 text-sm text-stone-700">
               <p>{selectedEvent.name} allows up to <strong>{selectedEvent.maxTicketsPerOutlet}</strong> ticket(s) per outlet.</p>
-              <p>{selectedEvent.sponsorshipName || "Bacardi sponsored activation"}{selectedEvent.market ? ` - ${selectedEvent.market}` : ""}</p>
             </div>
           )}
         </div>
@@ -1974,6 +1930,8 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
   );
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
   const [quickAction, setQuickAction] = useState<"" | "approved" | "rejected">("");
+  const [showSendWindow, setShowSendWindow] = useState(false);
+  const canSendTickets = request.status === "approved" || request.status === "partially_approved";
   const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
 
   // One-click approve/reject for the common case, visible directly on the
@@ -2061,6 +2019,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
       await api<{ delivery: { status: string } }>(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
       pendingSend.form.reset();
       setPendingSend(null);
+      setShowSendWindow(false);
       notify("Ticket email sent or simulated. Check dispatch history for details.");
       await onDone();
     } catch (error) {
@@ -2180,28 +2139,50 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           <ActionButton className="mt-6" variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
         </div>
 
-        <form onSubmit={sendTicket} className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 lg:grid-cols-2">
-          {request.status !== "approved" && request.status !== "partially_approved" && (
-            <div className="lg:col-span-2">
-              <Notice message="Ticket files can be sent only after the request is approved or partially approved." tone="warn" />
-            </div>
-          )}
-          <Field label="Email recipients">
-            <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
-          </Field>
-          <Field label="Subject">
-            <input name="subject" required defaultValue={`Bacardi tickets for ${request.event?.name}`} className={inputClass} />
-          </Field>
-          <Field label="Message body">
-            <textarea name="message" required defaultValue={defaultMessage} className={inputClass} rows={4} />
-          </Field>
-          <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
-            <input name="files" type="file" multiple required className={inputClass} />
-          </Field>
-          <div className="lg:col-span-2">
-            <ActionButton disabled={request.status !== "approved" && request.status !== "partially_approved"}><Send size={16} /> Send ticket email</ActionButton>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
+          <div>
+            <h4 className="text-sm font-semibold">Ticket files</h4>
+            <p className="text-sm text-stone-600">
+              {canSendTickets
+                ? "Approve is decided. Open the send window to attach files and email the tickets."
+                : "Approve or partially approve this request first, then send ticket files here."}
+            </p>
           </div>
-        </form>
+          <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
+            <Send size={16} /> Send ticket files
+          </ActionButton>
+        </div>
+
+        {showSendWindow && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Send ticket files</p>
+                  <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
+                </div>
+                <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
+                  <X size={18} />
+                </ActionButton>
+              </div>
+              <form onSubmit={sendTicket} className="mt-4 grid gap-3">
+                <Field label="Email recipients">
+                  <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
+                </Field>
+                <Field label="Subject">
+                  <input name="subject" required defaultValue={`Bacardi tickets for ${request.event?.name}`} className={inputClass} />
+                </Field>
+                <Field label="Message body">
+                  <textarea name="message" required defaultValue={defaultMessage} className={inputClass} rows={4} />
+                </Field>
+                <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
+                  <input name="files" type="file" multiple required className={inputClass} />
+                </Field>
+                <ActionButton disabled={!canSendTickets}><Send size={16} /> Send ticket email</ActionButton>
+              </form>
+            </div>
+          </div>
+        )}
 
         {pendingSend && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
