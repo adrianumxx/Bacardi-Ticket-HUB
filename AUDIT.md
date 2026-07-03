@@ -182,7 +182,16 @@ Tutti i punti sono indipendenti tra loro salvo il gruppo 7; nessuno richiede mig
 
 Verifica: `npm run lint` pulito, `npm run test:unit` 15/15, `npm run build` OK.
 
-### ⏳ Deferiti volutamente (rischio/ampiezza — richiedono una decisione o un intervento dedicato)
-- **1.1 Autenticazione reale (magic link / OTP).** È la falla più importante ma la sostituzione va decisa con te: cambia l'esperienza di login per tutti gli utenti e richiede Resend con sender verificato. Implementarla "alla cieca" rischia di bloccare l'accesso se l'email non è configurata → contrario a "non rompere nulla". Da fare come intervento dedicato e concordato.
-- **1.9 / 2.5** Atomicità limite outlet e invio email singola multi-destinatario (miglioramenti mirati, non bloccanti).
-- **3.4 Paginazione** liste API + **4.1 split del `dashboard.tsx`** da 2.402 righe + **4.2 auto-refresh notifiche** + **4.5 i18n** + **4.6 a11y**: refactor ampi da fare a tappe, fuori dallo scope di un fix sicuro non-breaking.
+### ✅ Risolti nel secondo giro
+- **1.9** Race condition sul limite ticket per outlet: pattern "insert poi riverifica e compensa" (rollback del documento se il limite viene superato da una richiesta concorrente) in `POST /api/requests` e `PATCH /api/requests/[id]`. Non uso transazioni Mongo native perché richiederebbero un replica set che non ogni deployment garantisce e che non potevo verificare in questo ambiente senza un MongoDB reale.
+- **2.5** `send-ticket` ora traccia lo stato di consegna **per destinatario** (`dispatch.deliveries[]`) invece di riportare solo l'esito di una delivery a caso; lo stato riassuntivo (`status`) diventa `failed` se anche un solo destinatario fallisce, cronologia e audit log includono i destinatari falliti.
+- **3.4** Paginazione opt-in su `GET /api/requests` (`limit`/`cursor`, cursor su `updatedAt`): senza parametri il comportamento resta identico a oggi (lista completa), per non rompere le statistiche/filtri client-side che oggi si aspettano tutti i record. Con i parametri, la route restituisce `nextCursor`/`hasMore` pronti per essere usati da una futura UI paginata.
+- **4.2** Polling automatico delle notifiche ogni 60s (si ferma quando la scheda non è visibile), così la campanella si aggiorna da sola.
+- **4.6** Aggiunto `aria-current` alla navigazione laterale, `aria-label` sulla `<nav>`, `aria-expanded` sul toggle mobile, `type="button"` mancante.
+- **4.7** Conferma esplicita (`window.confirm`) prima di: merge outlet (azione irreversibile, sposta tutte le richieste), blocco utente, disabilitazione accesso utente.
+
+Verifica: `npm run lint` pulito, `npm run test:unit` 15/15, `npm run build` OK (tutti i controlli rieseguiti dopo ogni gruppo di modifiche).
+
+### ⏳ Deferiti volutamente (per scelta esplicita o perché richiedono un refactor troppo ampio per essere "safe")
+- **1.1 Autenticazione reale (magic link / OTP).** Per scelta esplicita dell'utente il login resta solo-email + richiesta manuale al manager, com'è oggi. Non toccato.
+- **4.1 Split del `dashboard.tsx`** (2.402 righe in un unico client component) e **4.5 i18n** (traduzione IT): sono riscritture strutturali, non fix puntuali — il rischio di introdurre regressioni visive/comportamentali su un file di queste dimensioni supera il beneficio di farle "di fretta" senza un ambiente per testare la UI a schermo. Da pianificare come intervento a parte, a tappe (una tab alla volta), se vuoi procedere.

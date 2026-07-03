@@ -438,6 +438,16 @@ export function Dashboard() {
     return () => window.clearTimeout(timer);
   }, [loadNotifications, role, session?.user]);
 
+  // Poll for new notifications so the bell badge doesn't require a manual
+  // refresh. Skips ticks while the tab is hidden to avoid wasted requests.
+  useEffect(() => {
+    if (!session?.user || !role) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadNotifications();
+    }, 60000);
+    return () => window.clearInterval(interval);
+  }, [loadNotifications, role, session?.user]);
+
   const showNotice = useCallback((message: string, tone: Tone = "good") => {
     setNotice({ message, tone });
     window.setTimeout(() => setNotice(null), 5000);
@@ -504,6 +514,7 @@ export function Dashboard() {
               className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
+              aria-expanded={mobileNavOpen}
             >
               <Menu size={19} />
             </button>
@@ -592,12 +603,14 @@ export function Dashboard() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+            <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
               {tabs.map(([id, label, Icon]) => (
                 <button
                   key={id as string}
+                  type="button"
                   onClick={() => openTab(id as string)}
                   title={label as string}
+                  aria-current={currentTab === id ? "page" : undefined}
                   className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
                     currentTab === id ? "bg-[#1a1a18] text-white shadow-sm" : "text-stone-700 hover:bg-stone-100"
                   } ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
@@ -1250,7 +1263,22 @@ function OutletGroup({
                     <option key={item._id} value={item._id}>{item.name} - {item.city || "No city"}</option>
                   ))}
                 </select>
-                <ActionButton type="button" variant="secondary" disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`} onClick={() => void onMerge(outlet._id, mergeTargets[outlet._id])}>
+                <ActionButton
+                  type="button"
+                  variant="secondary"
+                  disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`}
+                  onClick={() => {
+                    const targetId = mergeTargets[outlet._id];
+                    const targetName = allOutlets.find((item) => item._id === targetId)?.name || "the selected outlet";
+                    if (
+                      window.confirm(
+                        `Merge "${outlet.name}" into "${targetName}"? This archives "${outlet.name}" and moves all of its ticket requests to "${targetName}". This cannot be undone.`,
+                      )
+                    ) {
+                      void onMerge(outlet._id, targetId);
+                    }
+                  }}
+                >
                   {busyAction === `${outlet._id}:merge` ? "Merging..." : "Merge"}
                 </ActionButton>
               </div>
@@ -1532,11 +1560,30 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
               <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Approval missing"}</Badge>
             </div>
             <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-              <ActionButton variant="secondary" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { status: user.status === "blocked" ? "active" : "blocked" })}>
+              <ActionButton
+                variant="secondary"
+                disabled={busyEmail === user.email}
+                onClick={() => {
+                  const blocking = user.status !== "blocked";
+                  if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
+                    void onUpdate(user.email, { status: blocking ? "blocked" : "active" });
+                  }
+                }}
+              >
                 {busyEmail === user.email ? "Updating..." : user.status === "blocked" ? "Unblock" : "Block"}
               </ActionButton>
               {user.accessEnabled ? (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: false })}>Disable access</ActionButton>
+                <ActionButton
+                  variant="ghost"
+                  disabled={busyEmail === user.email}
+                  onClick={() => {
+                    if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
+                      void onUpdate(user.email, { accessEnabled: false });
+                    }
+                  }}
+                >
+                  Disable access
+                </ActionButton>
               ) : (
                 <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
               )}

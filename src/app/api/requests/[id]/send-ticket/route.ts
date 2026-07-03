@@ -65,8 +65,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
 
     const deliveries = await Promise.all(
-      parsed.recipients.map((recipient) =>
-        notifyUser({
+      parsed.recipients.map(async (recipient) => {
+        const { delivery } = await notifyUser({
           recipient,
           actor: user.email,
           category: "tickets",
@@ -81,36 +81,46 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             html: emailHtml("Bacardi tickets", parsed.message),
             attachments,
           },
-        }),
-      ),
+        });
+        return { recipient, ...delivery };
+      }),
     );
-    const result = deliveries.some((item) => item.delivery.status === "sent")
-      ? deliveries.find((item) => item.delivery.status === "sent")!.delivery
-      : deliveries[0].delivery;
+
+    // Aggregate status for the summary field/badge: any real failure counts
+    // as a failed dispatch even if other recipients succeeded, so a partial
+    // failure is never silently reported as fully sent.
+    const anyFailed = deliveries.some((item) => item.status === "failed");
+    const anySent = deliveries.some((item) => item.status === "sent");
+    const summaryStatus = anyFailed ? "failed" : anySent ? "sent" : "simulated";
+    const failedRecipients = deliveries.filter((item) => item.status === "failed").map((item) => item.recipient);
+    const primaryProviderId = deliveries.find((item) => item.status === "sent")?.providerId || "";
 
     ticketRequest.dispatches.push({
       by: user.email,
       recipients: parsed.recipients,
       subject: parsed.subject,
       fileNames: files.map((file) => file.name),
-      status: result.status,
-      providerId: result.providerId,
+      status: summaryStatus,
+      providerId: primaryProviderId,
+      deliveries,
     });
     ticketRequest.history.push({
       by: user.email,
-      action: result.status === "failed" ? "ticket_email_failed" : "ticket_email_sent",
-      message: `Ticket email ${result.status} for ${parsed.recipients.join(", ")}.${result.error ? ` ${result.error}` : ""}`,
+      action: anyFailed ? "ticket_email_failed" : "ticket_email_sent",
+      message: anyFailed
+        ? `Ticket email failed for ${failedRecipients.join(", ")}; ${summaryStatus} overall for ${parsed.recipients.join(", ")}.`
+        : `Ticket email ${summaryStatus} for ${parsed.recipients.join(", ")}.`,
     });
     await ticketRequest.save();
     await auditLog({
       actor: user.email,
       action: "ticket_request.dispatch",
       target: id,
-      payload: { recipients: parsed.recipients, fileNames: files.map((file) => file.name), status: result.status },
+      payload: { recipients: parsed.recipients, fileNames: files.map((file) => file.name), status: summaryStatus, failedRecipients },
     });
 
     const updated = await TicketRequest.findById(id).populate("event").populate("outlet").lean();
-    return json({ request: updated, delivery: result });
+    return json({ request: updated, delivery: { status: summaryStatus, providerId: primaryProviderId, deliveries } });
   } catch (error) {
     return errorResponse(error);
   }

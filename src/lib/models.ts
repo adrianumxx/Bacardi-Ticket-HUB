@@ -113,6 +113,16 @@ const HistorySchema = new Schema(
   { _id: false },
 );
 
+const DispatchDeliverySchema = new Schema(
+  {
+    recipient: { type: String, required: true },
+    status: { type: String, enum: ["sent", "simulated", "failed", "skipped"], default: "skipped" },
+    providerId: { type: String, default: "" },
+    error: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
 const DispatchSchema = new Schema(
   {
     at: { type: Date, default: Date.now },
@@ -120,8 +130,12 @@ const DispatchSchema = new Schema(
     recipients: { type: [String], required: true },
     subject: { type: String, required: true },
     fileNames: { type: [String], default: [] },
+    // Summary status kept for backward compatibility with existing records
+    // and simple UI badges: "failed" if any recipient failed, else "sent" if
+    // any succeeded, else the first delivery's status.
     status: { type: String, enum: ["sent", "simulated", "failed"], default: "simulated" },
     providerId: { type: String, default: "" },
+    deliveries: { type: [DispatchDeliverySchema], default: [] },
   },
   { _id: false },
 );

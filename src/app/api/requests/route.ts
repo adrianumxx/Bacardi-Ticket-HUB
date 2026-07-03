@@ -16,17 +16,32 @@ type LeanEvent = {
   ticketTypes: { name: string; active: boolean }[];
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requireUser();
     await connectDb();
-    const query = user.role === "super_admin" ? {} : { requestedBy: user.email };
-    const requests = await TicketRequest.find(query)
-      .populate("event")
-      .populate("outlet")
-      .sort({ updatedAt: -1 })
-      .lean();
-    return json({ requests });
+    const query: Record<string, unknown> = user.role === "super_admin" ? {} : { requestedBy: user.email };
+
+    // Pagination is opt-in via `limit`/`cursor` (an updatedAt ISO timestamp
+    // from the last item of the previous page). Without these params the
+    // endpoint keeps returning the full list, unchanged, since the dashboard
+    // relies on the complete set for client-side stats and filtering.
+    const { searchParams } = new URL(request.url);
+    const limitParam = searchParams.get("limit");
+    const cursor = searchParams.get("cursor");
+    const limit = limitParam ? Math.min(Math.max(Number(limitParam) || 0, 1), 200) : undefined;
+    if (cursor) query.updatedAt = { $lt: new Date(cursor) };
+
+    let cursorQuery = TicketRequest.find(query).populate("event").populate("outlet").sort({ updatedAt: -1 });
+    if (limit) cursorQuery = cursorQuery.limit(limit + 1);
+    const rows = await cursorQuery.lean();
+
+    if (!limit) return json({ requests: rows });
+
+    const hasMore = rows.length > limit;
+    const requests = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? (requests.at(-1)?.updatedAt as Date | undefined)?.toISOString() ?? null : null;
+    return json({ requests, nextCursor, hasMore });
   } catch (error) {
     return errorResponse(error);
   }
@@ -86,6 +101,19 @@ export async function POST(request: Request) {
         },
       ],
     });
+
+    // Compensating check: the read-then-write above has a race window under
+    // concurrent requests for the same outlet. Re-verify right after insert
+    // and roll back this request if the limit was exceeded in the meantime,
+    // instead of relying on Mongo transactions (which require a replica set
+    // we can't assume every deployment has).
+    const confirmedQty = await usedTicketsForOutlet(input.eventId, outletId);
+    if (confirmedQty > event.maxTicketsPerOutlet) {
+      await TicketRequest.deleteOne({ _id: ticketRequest._id });
+      return badRequest(
+        `Outlet limit exceeded: another request was submitted at the same time. Maximum ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
+      );
+    }
 
     const adminRecipients = adminNotifyEmails();
     const adminSubject = `New sponsorship ticket request: ${event.name}`;
