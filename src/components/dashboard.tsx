@@ -217,7 +217,7 @@ function Notice({ message, tone = "neutral" }: { message: string; tone?: Tone })
     bad: "border-red-200 bg-red-50 text-red-900",
   };
   return (
-    <div className={`flex items-start gap-2 rounded-md border px-4 py-3 text-sm ${tones[tone]}`}>
+    <div className={`flex items-start gap-2 rounded-md border px-4 py-3 text-sm shadow-xl ${tones[tone]}`}>
       {tone === "bad" ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
       <span>{message}</span>
     </div>
@@ -633,8 +633,12 @@ export function Dashboard() {
           </div>
         </aside>
 
+        {notice && (
+          <div className="fixed inset-x-4 top-4 z-[80] sm:inset-x-auto sm:right-6 sm:w-full sm:max-w-md">
+            <Notice message={notice.message} tone={notice.tone} />
+          </div>
+        )}
         <section className="min-w-0 flex-1 space-y-5 px-4 py-4 sm:px-6 lg:px-8">
-          {notice && <Notice message={notice.message} tone={notice.tone} />}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Workspace</p>

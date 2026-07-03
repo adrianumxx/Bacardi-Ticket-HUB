@@ -38,20 +38,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const baseItems = input.items ?? current.items.map((item: RequestItemLine) => (typeof item.toObject === "function" ? item.toObject() : item));
     const nextItems = normalizeItemsForStatus(nextStatus, baseItems);
     const ticketTypeError = validateTicketTypes(eventDoc, nextItems);
-    if (ticketTypeError) {
-      console.warn("[request:patch-rejected]", { id, reason: "ticket_type", ticketTypeError, activeTypes: eventDoc.ticketTypes });
-      return badRequest(ticketTypeError);
-    }
+    if (ticketTypeError) return badRequest(ticketTypeError);
     const quantityStatusError = validateStatusQuantities(nextStatus, nextItems);
-    if (quantityStatusError) {
-      console.warn("[request:patch-rejected]", { id, reason: "status_quantity", quantityStatusError, nextStatus, nextItems });
-      return badRequest(quantityStatusError);
-    }
+    if (quantityStatusError) return badRequest(quantityStatusError);
 
     const existingQty = await usedTicketsForOutlet(String(eventDoc._id), String(outletDoc._id), id);
     const nextQty = quantityThatConsumesLimit(nextStatus, nextItems);
     if (existingQty + nextQty > eventDoc.maxTicketsPerOutlet) {
-      console.warn("[request:patch-rejected]", { id, reason: "outlet_limit", existingQty, nextQty, max: eventDoc.maxTicketsPerOutlet });
       return badRequest(
         `Outlet limit exceeded: ${existingQty} ticket(s) already reserved by other requests, maximum ${eventDoc.maxTicketsPerOutlet}.`,
       );
@@ -116,10 +109,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const updated = await TicketRequest.findById(id).populate("event").populate("outlet").lean();
     return json({ request: updated });
   } catch (error) {
-    console.warn("[request:patch-error]", {
-      name: error instanceof Error ? error.name : "Unknown",
-      message: error instanceof Error ? error.message : String(error),
-    });
     return errorResponse(error);
   }
 }
