@@ -9,12 +9,14 @@ import { approvedQuantity } from "@/lib/request-rules";
 import { notifyUser } from "@/lib/notifications";
 import { auditLog } from "@/lib/audit";
 
-type RequestItemLine = {
-  ticketType: string;
-  quantity: number;
-  approvedQuantity?: number;
-  toObject?: () => Omit<RequestItemLine, "toObject">;
-};
+const MAX_FILES = 10;
+const MAX_TOTAL_BYTES = 15 * 1024 * 1024; // 15 MB
+const ALLOWED_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "zip"];
+
+function fileExtension(name: string) {
+  const parts = name.toLowerCase().split(".");
+  return parts.length > 1 ? parts.pop()! : "";
+}
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -30,6 +32,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     if (files.length === 0) {
       return json({ error: "Attach at least one ticket file before sending." }, { status: 400 });
+    }
+    if (files.length > MAX_FILES) {
+      return json({ error: `Attach at most ${MAX_FILES} ticket files.` }, { status: 400 });
+    }
+    const invalidFile = files.find((file) => !ALLOWED_EXTENSIONS.includes(fileExtension(file.name)));
+    if (invalidFile) {
+      return json(
+        { error: `File type not allowed: ${invalidFile.name}. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.` },
+        { status: 400 },
+      );
+    }
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      return json({ error: "Ticket files exceed the 15 MB total size limit." }, { status: 400 });
     }
 
     const ticketRequest = await TicketRequest.findById(id).populate("event").populate("outlet");
@@ -49,8 +65,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
 
     const deliveries = await Promise.all(
-      parsed.recipients.map((recipient) =>
-        notifyUser({
+      parsed.recipients.map(async (recipient) => {
+        const { delivery } = await notifyUser({
           recipient,
           actor: user.email,
           category: "tickets",
@@ -65,46 +81,46 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             html: emailHtml("Bacardi tickets", parsed.message),
             attachments,
           },
-        }),
-      ),
+        });
+        return { recipient, ...delivery };
+      }),
     );
-    const result = deliveries.some((item) => item.delivery.status === "sent")
-      ? deliveries.find((item) => item.delivery.status === "sent")!.delivery
-      : deliveries[0].delivery;
+
+    // Aggregate status for the summary field/badge: any real failure counts
+    // as a failed dispatch even if other recipients succeeded, so a partial
+    // failure is never silently reported as fully sent.
+    const anyFailed = deliveries.some((item) => item.status === "failed");
+    const anySent = deliveries.some((item) => item.status === "sent");
+    const summaryStatus = anyFailed ? "failed" : anySent ? "sent" : "simulated";
+    const failedRecipients = deliveries.filter((item) => item.status === "failed").map((item) => item.recipient);
+    const primaryProviderId = deliveries.find((item) => item.status === "sent")?.providerId || "";
 
     ticketRequest.dispatches.push({
       by: user.email,
       recipients: parsed.recipients,
       subject: parsed.subject,
       fileNames: files.map((file) => file.name),
-      status: result.status,
-      providerId: result.providerId,
+      status: summaryStatus,
+      providerId: primaryProviderId,
+      deliveries,
     });
     ticketRequest.history.push({
       by: user.email,
-      action: result.status === "failed" ? "ticket_email_failed" : "ticket_email_sent",
-      message: `Ticket email ${result.status} for ${parsed.recipients.join(", ")}.${result.error ? ` ${result.error}` : ""}`,
+      action: anyFailed ? "ticket_email_failed" : "ticket_email_sent",
+      message: anyFailed
+        ? `Ticket email failed for ${failedRecipients.join(", ")}; ${summaryStatus} overall for ${parsed.recipients.join(", ")}.`
+        : `Ticket email ${summaryStatus} for ${parsed.recipients.join(", ")}.`,
     });
-    if (ticketRequest.status === "pending") {
-      ticketRequest.status = "approved";
-      ticketRequest.items = ticketRequest.items.map((item: RequestItemLine) => {
-        const line = typeof item.toObject === "function" ? item.toObject() : item;
-        return {
-          ...line,
-          approvedQuantity: line.approvedQuantity || line.quantity,
-        };
-      });
-    }
     await ticketRequest.save();
     await auditLog({
       actor: user.email,
       action: "ticket_request.dispatch",
       target: id,
-      payload: { recipients: parsed.recipients, fileNames: files.map((file) => file.name), status: result.status },
+      payload: { recipients: parsed.recipients, fileNames: files.map((file) => file.name), status: summaryStatus, failedRecipients },
     });
 
     const updated = await TicketRequest.findById(id).populate("event").populate("outlet").lean();
-    return json({ request: updated, delivery: result });
+    return json({ request: updated, delivery: { status: summaryStatus, providerId: primaryProviderId, deliveries } });
   } catch (error) {
     return errorResponse(error);
   }

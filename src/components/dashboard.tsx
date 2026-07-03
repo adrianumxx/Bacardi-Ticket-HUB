@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Download,
   LogOut,
   Mail,
@@ -24,6 +25,8 @@ import {
   Ticket,
   Users,
   X,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import {
   renderEventStatus,
@@ -242,7 +245,7 @@ function ActionButton({
 }
 
 export function LoginScreen() {
-  const [email, setEmail] = useState("amelillo@bacardi.com");
+  const [email, setEmail] = useState("");
   const [accessEmail, setAccessEmail] = useState("");
   const [accessName, setAccessName] = useState("");
   const [accessCompany, setAccessCompany] = useState("");
@@ -260,7 +263,11 @@ export function LoginScreen() {
     const result = await signIn("email", { email, redirect: false, callbackUrl: "/" });
     setSubmitting(false);
     if (result?.error) {
-      setError("This email is not approved yet. Use Request access to send your details to a manager.");
+      setError(
+        result.error === "CredentialsSignin"
+          ? "This email is not approved yet. Use Request access to send your details to a manager."
+          : "Sign-in is temporarily unavailable. Please try again in a moment.",
+      );
       return;
     }
     window.location.href = result?.url || "/";
@@ -434,6 +441,16 @@ export function Dashboard() {
     return () => window.clearTimeout(timer);
   }, [loadNotifications, role, session?.user]);
 
+  // Poll for new notifications so the bell badge doesn't require a manual
+  // refresh. Skips ticks while the tab is hidden to avoid wasted requests.
+  useEffect(() => {
+    if (!session?.user || !role) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadNotifications();
+    }, 60000);
+    return () => window.clearInterval(interval);
+  }, [loadNotifications, role, session?.user]);
+
   const showNotice = useCallback((message: string, tone: Tone = "good") => {
     setNotice({ message, tone });
     window.setTimeout(() => setNotice(null), 5000);
@@ -500,6 +517,7 @@ export function Dashboard() {
               className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
+              aria-expanded={mobileNavOpen}
             >
               <Menu size={19} />
             </button>
@@ -588,12 +606,14 @@ export function Dashboard() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+            <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
               {tabs.map(([id, label, Icon]) => (
                 <button
                   key={id as string}
+                  type="button"
                   onClick={() => openTab(id as string)}
                   title={label as string}
+                  aria-current={currentTab === id ? "page" : undefined}
                   className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
                     currentTab === id ? "bg-[#1a1a18] text-white shadow-sm" : "text-stone-700 hover:bg-stone-100"
                   } ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
@@ -627,11 +647,11 @@ export function Dashboard() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-            <Kpi label="Total Requests" value={kpis.total} />
-            <Kpi label="Pending" value={kpis.pending} />
-            <Kpi label="Approved" value={kpis.approved} />
-            <Kpi label="Rejected" value={kpis.rejected} />
-            <Kpi label="Ticket Emails Sent" value={kpis.sent} />
+            <Kpi label="Total Requests" value={kpis.total} icon={Ticket} tone="gold" />
+            <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
+            <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
+            <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
+            <Kpi label="Ticket Emails Sent" value={kpis.sent} icon={Send} tone="neutral" />
           </div>
 
           {currentTab === "requests" && <AdminRequests requests={requests} events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
@@ -732,11 +752,28 @@ function NotificationDrawer({
   );
 }
 
-function Kpi({ label, value }: { label: string; value: number }) {
+const kpiTones = {
+  neutral: { bar: "bg-stone-300", chip: "bg-stone-100 text-stone-600" },
+  good: { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700" },
+  warn: { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700" },
+  bad: { bar: "bg-red-400", chip: "bg-red-50 text-red-700" },
+  gold: { bar: "bg-[#b8860b]", chip: "bg-[#fbf1da] text-[#8a6508]" },
+} as const;
+
+function Kpi({ label, value, icon: Icon, tone = "neutral" }: { label: string; value: number; icon: LucideIcon; tone?: keyof typeof kpiTones }) {
+  const palette = kpiTones[tone];
   return (
-    <div className="rounded-md border border-stone-200 bg-white p-3 shadow-sm">
-      <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    <div className="relative overflow-hidden rounded-md border border-stone-200 bg-white p-3 shadow-sm transition hover:shadow-md">
+      <span className={`absolute inset-y-0 left-0 w-1 ${palette.bar}`} aria-hidden />
+      <div className="flex items-start justify-between gap-2 pl-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+        </div>
+        <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${palette.chip}`}>
+          <Icon size={18} />
+        </span>
+      </div>
     </div>
   );
 }
@@ -813,9 +850,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: form.get("name"),
           eventKind: form.get("eventKind"),
-          sponsorshipName: form.get("sponsorshipName"),
-          sponsorshipTier: form.get("sponsorshipTier"),
-          market: form.get("market"),
           venue: form.get("venue"),
           city: form.get("city"),
           startsAt: dateTimeFromForm(form),
@@ -847,9 +881,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: data.get("name"),
           eventKind: data.get("eventKind"),
-          sponsorshipName: data.get("sponsorshipName"),
-          sponsorshipTier: data.get("sponsorshipTier"),
-          market: data.get("market"),
           venue: data.get("venue"),
           city: data.get("city"),
           startsAt: dateTimeFromForm(data),
@@ -884,6 +915,20 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
     }
   }
 
+  async function deleteEvent(event: EventItem) {
+    if (!window.confirm(`Delete "${event.name}" permanently? This cannot be undone.`)) return;
+    setEventActionId(event._id);
+    try {
+      await api(`/api/events/${event._id}`, { method: "DELETE" });
+      notify("Sponsored item deleted.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to delete the sponsored item.", "bad");
+    } finally {
+      setEventActionId("");
+    }
+  }
+
   async function duplicateEvent(event: EventItem) {
     setEventActionId(event._id);
     try {
@@ -892,9 +937,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         body: JSON.stringify({
           name: `${event.name} copy`,
           eventKind: event.eventKind || "event",
-          sponsorshipName: event.sponsorshipName,
-          sponsorshipTier: event.sponsorshipTier,
-          market: event.market,
           venue: event.venue,
           city: event.city,
           startsAt: event.startsAt,
@@ -921,20 +963,13 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <h2 className="mt-1 text-lg font-semibold">Create sponsored item</h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">Publish the event or festival before account managers can request tickets.</p>
         </div>
-        <Field label="Event or festival name"><input name="name" required className={inputClass} /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Type">
-            <select name="eventKind" className={inputClass} defaultValue="event">
-              <option value="event">Event</option>
-              <option value="festival">Festival</option>
-            </select>
-          </Field>
-          <Field label="Market"><input name="market" placeholder="Italy, Spain, Benelux..." className={inputClass} /></Field>
-        </div>
-        <Field label="Sponsorship name" hint="Example: Bacardi at Tomorrowland, Bacardi backstage experience.">
-          <input name="sponsorshipName" className={inputClass} />
+        <Field label="Event or festival name"><input name="name" required autoFocus className={inputClass} /></Field>
+        <Field label="Type">
+          <select name="eventKind" className={inputClass} defaultValue="event">
+            <option value="event">Event</option>
+            <option value="festival">Festival</option>
+          </select>
         </Field>
-        <Field label="Sponsorship role"><input name="sponsorshipTier" placeholder="Main sponsor, pouring partner, VIP partner..." className={inputClass} /></Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Venue"><input name="venue" className={inputClass} /></Field>
           <Field label="City"><input name="city" className={inputClass} /></Field>
@@ -1025,9 +1060,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                     <option value="festival">Festival</option>
                   </select>
                 </Field>
-                <Field label="Market"><input name="market" defaultValue={event.market} className={inputClass} /></Field>
-                <Field label="Sponsorship name"><input name="sponsorshipName" defaultValue={event.sponsorshipName} className={inputClass} /></Field>
-                <Field label="Sponsorship role"><input name="sponsorshipTier" defaultValue={event.sponsorshipTier} className={inputClass} /></Field>
                 <Field label="Venue"><input name="venue" defaultValue={event.venue} className={inputClass} /></Field>
                 <Field label="City"><input name="city" defaultValue={event.city} className={inputClass} /></Field>
                 <Field label="Date">
@@ -1048,6 +1080,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
                 ) : (
                   <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void updateEventStatus(event._id, "closed")}>Close item</ActionButton>
                 )}
+                <ActionButton type="button" variant="ghost" disabled={eventActionId === event._id} onClick={() => void deleteEvent(event)}>Delete</ActionButton>
               </div>
             </form>
           </details>
@@ -1065,7 +1098,7 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
   const [outletSearch, setOutletSearch] = useState("");
   const [formError, setFormError] = useState("");
   const visibleOutlets = outlets.filter((outlet) =>
-    [outlet.name, outlet.type, outlet.city, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
+    [outlet.name, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
   );
   const pending = visibleOutlets.filter((outlet) => outlet.status === "pending");
   const approved = visibleOutlets.filter((outlet) => outlet.status === "approved");
@@ -1080,7 +1113,7 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
     try {
       await api("/api/outlets", {
         method: "POST",
-        body: JSON.stringify({ name: form.get("name"), type: form.get("type"), city: form.get("city"), status: "approved" }),
+        body: JSON.stringify({ name: form.get("name"), status: "approved" }),
       });
       formElement.reset();
       notify("Outlet added.");
@@ -1139,13 +1172,11 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Outlet registry</p>
           <h2 className="mt-1 text-lg font-semibold">Add outlet</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">Create approved bars, clubs, restaurants, or venues for ticket requests.</p>
+          <p className="mt-1 text-sm leading-6 text-stone-600">Give it a name so account managers can select it for ticket requests.</p>
         </div>
-        <Field label="Name"><input name="name" required className={inputClass} /></Field>
-        <Field label="Type"><input name="type" placeholder="Bar, restaurant, club" className={inputClass} /></Field>
-        <Field label="City"><input name="city" className={inputClass} /></Field>
+        <Field label="Name"><input name="name" required autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} /></Field>
         {formError && <Notice message={formError} tone="bad" />}
-        <ActionButton disabled={submitting}>{submitting ? "Adding outlet..." : "Add outlet"}</ActionButton>
+        <ActionButton disabled={submitting}>{submitting ? "Adding..." : "Add outlet"}</ActionButton>
       </form>
       <div className="space-y-4">
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
@@ -1196,33 +1227,24 @@ function OutletGroup({
         {outlets.map((outlet) => (
           <details key={outlet._id} className="p-4">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{outlet.name}</h3>
-                <p className="text-sm text-stone-600">
-                  {outlet.type} {outlet.city ? `- ${outlet.city}` : ""}
-                </p>
-              </div>
+              <h3 className="font-semibold">{outlet.name}</h3>
               <div className="flex items-center gap-2">
                 <Badge tone={outlet.status === "approved" ? "good" : outlet.status === "pending" ? "warn" : "bad"}>{renderOutletStatus(outlet.status)}</Badge>
                 <ChevronDown size={18} />
               </div>
             </summary>
             <form
-              className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 md:grid-cols-3"
+              className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[1fr_auto]"
               onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 void onUpdate(outlet._id, {
                   name: String(data.get("name") || ""),
-                  type: String(data.get("type") || ""),
-                  city: String(data.get("city") || ""),
                   status: data.get("status") as OutletStatus,
                 });
               }}
             >
               <Field label="Name"><input name="name" defaultValue={outlet.name} className={inputClass} required /></Field>
-              <Field label="Type"><input name="type" defaultValue={outlet.type} className={inputClass} /></Field>
-              <Field label="City"><input name="city" defaultValue={outlet.city} className={inputClass} /></Field>
               <Field label="Status">
                 <select name="status" defaultValue={outlet.status} className={inputClass}>
                   <option value="approved">Approved</option>
@@ -1230,12 +1252,12 @@ function OutletGroup({
                   <option value="archived">Archived</option>
                 </select>
               </Field>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-2 sm:col-span-2">
                 <ActionButton variant="secondary" disabled={busyAction === `${outlet._id}:save`}>{busyAction === `${outlet._id}:save` ? "Saving..." : "Save outlet"}</ActionButton>
                 {outlet.status !== "approved" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "approved")}>Approve</ActionButton>}
                 {outlet.status !== "archived" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "archived")}>Archive</ActionButton>}
               </div>
-              <div className="grid gap-2 md:col-span-3 md:grid-cols-[1fr_auto]">
+              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
                 <select
                   className={inputClass}
                   value={mergeTargets[outlet._id] || ""}
@@ -1243,10 +1265,25 @@ function OutletGroup({
                 >
                   <option value="">Merge into another outlet...</option>
                   {allOutlets.filter((item) => item._id !== outlet._id && item.status === "approved").map((item) => (
-                    <option key={item._id} value={item._id}>{item.name} - {item.city || "No city"}</option>
+                    <option key={item._id} value={item._id}>{item.name}</option>
                   ))}
                 </select>
-                <ActionButton type="button" variant="secondary" disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`} onClick={() => void onMerge(outlet._id, mergeTargets[outlet._id])}>
+                <ActionButton
+                  type="button"
+                  variant="secondary"
+                  disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`}
+                  onClick={() => {
+                    const targetId = mergeTargets[outlet._id];
+                    const targetName = allOutlets.find((item) => item._id === targetId)?.name || "the selected outlet";
+                    if (
+                      window.confirm(
+                        `Merge "${outlet.name}" into "${targetName}"? This archives "${outlet.name}" and moves all of its ticket requests to "${targetName}". This cannot be undone.`,
+                      )
+                    ) {
+                      void onMerge(outlet._id, targetId);
+                    }
+                  }}
+                >
                   {busyAction === `${outlet._id}:merge` ? "Merging..." : "Merge"}
                 </ActionButton>
               </div>
@@ -1528,11 +1565,30 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
               <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Approval missing"}</Badge>
             </div>
             <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-              <ActionButton variant="secondary" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { status: user.status === "blocked" ? "active" : "blocked" })}>
+              <ActionButton
+                variant="secondary"
+                disabled={busyEmail === user.email}
+                onClick={() => {
+                  const blocking = user.status !== "blocked";
+                  if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
+                    void onUpdate(user.email, { status: blocking ? "blocked" : "active" });
+                  }
+                }}
+              >
                 {busyEmail === user.email ? "Updating..." : user.status === "blocked" ? "Unblock" : "Block"}
               </ActionButton>
               {user.accessEnabled ? (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: false })}>Disable access</ActionButton>
+                <ActionButton
+                  variant="ghost"
+                  disabled={busyEmail === user.email}
+                  onClick={() => {
+                    if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
+                      void onUpdate(user.email, { accessEnabled: false });
+                    }
+                  }}
+                >
+                  Disable access
+                </ActionButton>
               ) : (
                 <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
               )}
@@ -1557,7 +1613,7 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
   const filteredOutlets = approvedOutlets.filter((outlet) =>
-    `${outlet.name} ${outlet.city} ${outlet.type}`.toLowerCase().includes(outletSearch.toLowerCase()),
+    outlet.name.toLowerCase().includes(outletSearch.toLowerCase()),
   );
   const blockedReason =
     published.length === 0
@@ -1581,9 +1637,7 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
         body: JSON.stringify({
           eventId: form.get("eventId"),
           outletId: useNewOutlet ? undefined : form.get("outletId"),
-          newOutlet: useNewOutlet
-            ? { name: form.get("newOutletName"), type: form.get("newOutletType"), city: form.get("newOutletCity") }
-            : undefined,
+          newOutlet: useNewOutlet ? { name: form.get("newOutletName") } : undefined,
           recipientEmails: form.get("recipientEmails"),
           items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
           notes: form.get("notes"),
@@ -1634,22 +1688,18 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
             Propose a new outlet
           </label>
           {useNewOutlet ? (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Outlet name"><input name="newOutletName" className={inputClass} required={useNewOutlet} /></Field>
-              <Field label="Type"><input name="newOutletType" placeholder="Bar, restaurant, club" className={inputClass} /></Field>
-              <Field label="City"><input name="newOutletCity" className={inputClass} /></Field>
-            </div>
+            <Field label="Outlet name"><input name="newOutletName" autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} required={useNewOutlet} /></Field>
           ) : (
             <div className="grid gap-3">
               <Field label="Search outlet">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 text-stone-400" size={16} />
-                  <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search by name, city, or type" />
+                  <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search by name" />
                 </div>
               </Field>
               <Field label="Outlet">
                 <select name="outletId" className={inputClass} required={!useNewOutlet} disabled={filteredOutlets.length === 0}>
-                  {filteredOutlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name} - {outlet.city || "No city"}</option>)}
+                  {filteredOutlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name}</option>)}
                 </select>
               </Field>
             </div>
@@ -1844,9 +1894,9 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
               <div className="grid grid-cols-3 gap-2">
                 <MiniMetric label="Requests" value={row.requests} />
                 <MiniMetric label="Tickets" value={row.tickets} />
-                <MiniMetric label="Approved" value={row.approved} />
-                <MiniMetric label="Pending" value={row.pending} />
-                <MiniMetric label="Rejected" value={row.rejected} />
+                <MiniMetric label="Approved" value={row.approved} tone="good" />
+                <MiniMetric label="Pending" value={row.pending} tone="warn" />
+                <MiniMetric label="Rejected" value={row.rejected} tone="bad" />
                 <MiniMetric label="Outlets" value={row.outlets.size} />
               </div>
               <p className="text-stone-600 xl:col-span-2">Outlets: {mapSummary(row.outlets, "No outlets")}</p>
@@ -1860,11 +1910,18 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
   );
 }
 
-function MiniMetric({ label, value }: { label: string; value: number }) {
+const miniMetricTones = {
+  neutral: "border-stone-200 bg-stone-50 text-stone-950",
+  good: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warn: "border-amber-200 bg-amber-50 text-amber-800",
+  bad: "border-red-200 bg-red-50 text-red-800",
+} as const;
+
+function MiniMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
   return (
-    <div className="rounded-md border border-stone-200 bg-stone-50 p-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+    <div className={`rounded-md border p-2 ${miniMetricTones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] opacity-70">{label}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -1912,7 +1969,36 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
+  const [quickAction, setQuickAction] = useState<"" | "approved" | "rejected">("");
   const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+
+  // One-click approve/reject for the common case, visible directly on the
+  // collapsed row so the manager never has to open a request just to approve
+  // it in full. Partial approval and note-taking still happen in the
+  // expanded detail below.
+  async function quickDecision(nextStatus: "approved" | "rejected") {
+    setQuickAction(nextStatus);
+    setActionError("");
+    try {
+      await api(`/api/requests/${request._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: nextStatus,
+          items: request.items.map((item) => ({
+            ...item,
+            approvedQuantity: nextStatus === "approved" ? item.quantity : 0,
+          })),
+        }),
+      });
+      notify(nextStatus === "approved" ? "Request approved." : "Request rejected.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update the request.";
+      notify(message, "bad");
+    } finally {
+      setQuickAction("");
+    }
+  }
 
   async function update() {
     const nextItems = request.items.map((item, index) => {
@@ -1982,8 +2068,15 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     }
   }
 
+  const borderTones = {
+    neutral: "border-l-stone-300",
+    good: "border-l-emerald-400",
+    warn: "border-l-amber-400",
+    bad: "border-l-red-400",
+  } as const;
+
   return (
-    <details className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+    <details className={`overflow-hidden rounded-md border border-l-4 border-stone-250 bg-white p-4 shadow-sm transition hover:shadow-md ${borderTones[statusTone(request.status)]}`}>
       <summary className="grid cursor-pointer list-none gap-3 md:grid-cols-[1.5fr_1fr_auto] md:items-center">
         <div>
           <h3 className="text-lg font-semibold">{request.event?.name}</h3>
@@ -1995,9 +2088,39 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           {request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}
           <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
         </div>
-        <div className="flex items-center justify-between gap-2 text-sm text-stone-500 md:justify-end">
-          {formatShortDate(request.createdAt)}
-          <ChevronDown size={18} />
+        <div className="flex items-center justify-end gap-2">
+          {request.status === "pending" && (
+            <div className="flex items-center gap-2">
+              <ActionButton
+                type="button"
+                variant="primary"
+                className="min-h-9 px-3 text-xs"
+                disabled={quickAction !== ""}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void quickDecision("approved");
+                }}
+              >
+                <CheckCircle2 size={14} /> {quickAction === "approved" ? "Approving..." : "Approve"}
+              </ActionButton>
+              <ActionButton
+                type="button"
+                variant="secondary"
+                className="min-h-9 px-3 text-xs"
+                disabled={quickAction !== ""}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void quickDecision("rejected");
+                }}
+              >
+                <XCircle size={14} /> {quickAction === "rejected" ? "Rejecting..." : "Reject"}
+              </ActionButton>
+            </div>
+          )}
+          <span className="hidden text-sm text-stone-500 md:inline">{formatShortDate(request.createdAt)}</span>
+          <ChevronDown size={18} className="text-stone-400" />
         </div>
       </summary>
 

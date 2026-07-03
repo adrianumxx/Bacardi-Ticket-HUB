@@ -4,6 +4,7 @@ import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { renderRequestStatus } from "@/lib/labels";
 import { auditLog } from "@/lib/audit";
+import { endOfDay } from "@/lib/utils";
 
 type ReportLine = {
   _id: unknown;
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
     if (dateFrom || dateTo) {
       query.createdAt = {
         ...(dateFrom ? { $gte: new Date(dateFrom) } : {}),
-        ...(dateTo ? { $lte: new Date(dateTo) } : {}),
+        ...(dateTo ? { $lte: endOfDay(dateTo) } : {}),
       };
     }
 

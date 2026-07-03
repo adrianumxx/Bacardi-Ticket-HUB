@@ -1,7 +1,8 @@
-import { errorResponse, json } from "@/lib/api";
+import { errorResponse, json, serializeDoc } from "@/lib/api";
 import { requireSuperAdmin } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { AuditLog } from "@/lib/models";
+import { endOfDay } from "@/lib/utils";
 
 export async function GET(request: Request) {
   try {
@@ -23,12 +24,12 @@ export async function GET(request: Request) {
     if (dateFrom || dateTo) {
       query.createdAt = {
         ...(dateFrom ? { $gte: new Date(dateFrom) } : {}),
-        ...(dateTo ? { $lte: new Date(dateTo) } : {}),
+        ...(dateTo ? { $lte: endOfDay(dateTo) } : {}),
       };
     }
 
     const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(limit).lean();
-    return json({ logs: JSON.parse(JSON.stringify(logs)) });
+    return json({ logs: serializeDoc(logs) });
   } catch (error) {
     return errorResponse(error);
   }

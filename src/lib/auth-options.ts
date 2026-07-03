@@ -15,14 +15,14 @@ const providers: NextAuthOptions["providers"] = [
       const email = normalizeEmail(credentials?.email || "");
       if (!email) return null;
       if (process.env.NODE_ENV === "production") {
-        const limit = rateLimit(`login:${email}`, 20, 60 * 60 * 1000);
+        const limit = await rateLimit(`login:${email}`, 20, 60 * 60 * 1000);
         if (limit.limited) {
           console.warn("[auth:rate-limited]", { email });
           return null;
         }
       }
       try {
-        const profile = await ensureAllowedProfile(email, email.split("@")[0]);
+        const profile = await ensureAllowedProfile(email, email.split("@")[0], { touchLogin: true });
         if (!profile) return null;
         return {
           id: String(profile._id),
@@ -50,7 +50,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       if (!user.email) return false;
       try {
-        const profile = await ensureAllowedProfile(user.email, user.name);
+        const profile = await ensureAllowedProfile(user.email, user.name, { touchLogin: true });
         return Boolean(profile);
       } catch (error) {
         console.error("[auth:signin-failed]", {

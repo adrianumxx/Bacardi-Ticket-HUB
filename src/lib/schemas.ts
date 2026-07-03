@@ -4,7 +4,7 @@ import { splitEmails } from "@/lib/utils";
 export const roleSchema = z.enum(["super_admin", "account_manager"]);
 
 export const allowedUserSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   role: roleSchema.default("account_manager"),
 });
 
@@ -16,7 +16,7 @@ export const adminUserUpdateSchema = z.object({
 });
 
 export const accountRequestSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   name: z.string().min(2),
   company: z.string().optional().default(""),
   reason: z.string().optional().default(""),
@@ -52,7 +52,7 @@ export const eventSchema = z.object({
 
 export const outletSchema = z.object({
   name: z.string().min(2),
-  type: z.string().optional().default("bar"),
+  type: z.string().optional().default(""),
   city: z.string().optional().default(""),
   status: z.enum(["approved", "pending", "archived"]).default("approved"),
   notes: z.string().optional().default(""),
@@ -82,20 +82,20 @@ export const createRequestSchema = z.object({
     .optional()
     .default("")
     .transform((value) => splitEmails(value))
-    .pipe(z.array(z.string().email()).min(1, "Add at least one recipient email.")),
+    .pipe(z.array(z.email()).min(1, "Add at least one recipient email.")),
   items: z.array(requestItemBaseSchema.omit({ approvedQuantity: true })).min(1),
   notes: z.string().optional().default(""),
 });
 
 export const updateRequestSchema = z.object({
   status: z.enum(["pending", "approved", "partially_approved", "rejected"]).optional(),
-  recipientEmails: z.array(z.string().email()).optional(),
+  recipientEmails: z.array(z.email()).optional(),
   items: z.array(requestItemSchema).optional(),
   adminNotes: z.string().optional(),
 });
 
 export const sendTicketSchema = z.object({
-  recipients: z.array(z.string().email()).min(1),
+  recipients: z.array(z.email()).min(1),
   subject: z.string().min(2),
   message: z.string().min(2),
 });

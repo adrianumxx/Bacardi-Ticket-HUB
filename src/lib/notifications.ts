@@ -41,7 +41,7 @@ export async function notifyUser(input: NotifyInput): Promise<NotifyResult> {
   });
 
   const delivery = input.email
-    ? await deliverOptionalEmail({
+    ? await deliverMail({
         to: [input.recipient],
         subject: input.email.subject || input.title,
         html: input.email.html || emailHtml(input.title, input.message),
@@ -68,18 +68,6 @@ export async function notifyAdmins(input: Omit<NotifyInput, "recipient">) {
     ];
   }
   return Promise.all(recipients.map((recipient) => notifyUser({ ...input, recipient })));
-}
-
-export async function deliverOptionalEmail(input: {
-  to: string[];
-  subject: string;
-  html: string;
-  attachments?: { filename: string; content: string }[];
-}) {
-  if (!process.env.RESEND_API_KEY) {
-    return deliverMail(input);
-  }
-  return deliverMail(input);
 }
 
 export async function markNotificationRead(id: string, recipient: string, read: boolean) {

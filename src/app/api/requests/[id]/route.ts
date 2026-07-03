@@ -51,6 +51,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     }
 
     const previousStatus = current.status;
+    const previousItems = current.items;
     current.status = nextStatus;
     if (input.recipientEmails) current.recipientEmails = input.recipientEmails;
     current.items = nextItems;
@@ -89,6 +90,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       });
     }
     await current.save();
+
+    // Compensating check: re-verify the outlet limit after the write to
+    // close the race window against a concurrent update on a different
+    // request for the same outlet, and roll back this change if exceeded.
+    const confirmedQty = await usedTicketsForOutlet(String(eventDoc._id), String(outletDoc._id), id);
+    if (confirmedQty > eventDoc.maxTicketsPerOutlet) {
+      current.status = previousStatus;
+      current.items = previousItems;
+      await current.save();
+      return badRequest(
+        `Outlet limit exceeded: another update was made at the same time. Maximum ${eventDoc.maxTicketsPerOutlet} ticket(s) per outlet.`,
+      );
+    }
+
     await auditLog({ actor: user.email, action: "ticket_request.updated", target: id, payload: { status: nextStatus, previousStatus } });
 
     const updated = await TicketRequest.findById(id).populate("event").populate("outlet").lean();

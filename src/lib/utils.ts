@@ -24,6 +24,15 @@ export function formatDate(value?: string | Date | null) {
   }).format(new Date(value));
 }
 
+// Interprets a "YYYY-MM-DD" filter value as the inclusive end of that day so
+// range filters (dateTo) also match records created during the selected day.
+export function endOfDay(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return date;
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
 export function formatShortDate(value?: string | Date | null) {
   if (!value) return "TBD";
   return new Intl.DateTimeFormat("en-GB", {

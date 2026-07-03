@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+import { ClientSession, Types } from "mongoose";
 import { TicketRequest } from "@/lib/models";
 
 export type TicketLineInput = {
@@ -72,7 +72,12 @@ export function validateStatusQuantities(status: string, items: TicketLineInput[
   return "";
 }
 
-export async function usedTicketsForOutlet(eventId: string, outletId: string, excludeRequestId?: string) {
+export async function usedTicketsForOutlet(
+  eventId: string,
+  outletId: string,
+  excludeRequestId?: string,
+  session?: ClientSession,
+) {
   const match: Record<string, unknown> = {
     event: new Types.ObjectId(eventId),
     outlet: new Types.ObjectId(outletId),
@@ -80,23 +85,26 @@ export async function usedTicketsForOutlet(eventId: string, outletId: string, ex
   };
   if (excludeRequestId) match._id = { $ne: new Types.ObjectId(excludeRequestId) };
 
-  const rows = await TicketRequest.aggregate<{ total: number }>([
-    { $match: match },
-    { $unwind: "$items" },
-    {
-      $group: {
-        _id: null,
-        total: {
-          $sum: {
-            $cond: [
-              { $eq: ["$status", "pending"] },
-              "$items.quantity",
-              { $ifNull: ["$items.approvedQuantity", "$items.quantity"] },
-            ],
+  const rows = await TicketRequest.aggregate<{ total: number }>(
+    [
+      { $match: match },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: {
+              $cond: [
+                { $eq: ["$status", "pending"] },
+                "$items.quantity",
+                { $ifNull: ["$items.approvedQuantity", "$items.quantity"] },
+              ],
+            },
           },
         },
       },
-    },
-  ]);
+    ],
+    session ? { session } : undefined,
+  );
   return rows[0]?.total ?? 0;
 }
