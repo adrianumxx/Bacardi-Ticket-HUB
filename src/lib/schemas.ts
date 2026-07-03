@@ -52,7 +52,7 @@ export const eventSchema = z.object({
 
 export const outletSchema = z.object({
   name: z.string().min(2),
-  type: z.string().optional().default("bar"),
+  type: z.string().optional().default(""),
   city: z.string().optional().default(""),
   status: z.enum(["approved", "pending", "archived"]).default("approved"),
   notes: z.string().optional().default(""),

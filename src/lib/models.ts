@@ -85,7 +85,7 @@ const EventSchema = new Schema(
 const OutletSchema = new Schema(
   {
     name: { type: String, required: true },
-    type: { type: String, default: "bar" },
+    type: { type: String, default: "" },
     city: { type: String, default: "" },
     status: { type: String, enum: ["approved", "pending", "archived"], default: "approved" },
     proposedBy: { type: String, default: "" },

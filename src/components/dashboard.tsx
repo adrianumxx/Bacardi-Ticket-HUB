@@ -1097,7 +1097,7 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
   const [outletSearch, setOutletSearch] = useState("");
   const [formError, setFormError] = useState("");
   const visibleOutlets = outlets.filter((outlet) =>
-    [outlet.name, outlet.type, outlet.city, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
+    [outlet.name, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
   );
   const pending = visibleOutlets.filter((outlet) => outlet.status === "pending");
   const approved = visibleOutlets.filter((outlet) => outlet.status === "approved");
@@ -1112,7 +1112,7 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
     try {
       await api("/api/outlets", {
         method: "POST",
-        body: JSON.stringify({ name: form.get("name"), type: form.get("type"), city: form.get("city"), status: "approved" }),
+        body: JSON.stringify({ name: form.get("name"), status: "approved" }),
       });
       formElement.reset();
       notify("Outlet added.");
@@ -1171,13 +1171,11 @@ function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: 
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Outlet registry</p>
           <h2 className="mt-1 text-lg font-semibold">Add outlet</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">Create approved bars, clubs, restaurants, or venues for ticket requests.</p>
+          <p className="mt-1 text-sm leading-6 text-stone-600">Give it a name so account managers can select it for ticket requests.</p>
         </div>
-        <Field label="Name"><input name="name" required className={inputClass} /></Field>
-        <Field label="Type"><input name="type" placeholder="Bar, restaurant, club" className={inputClass} /></Field>
-        <Field label="City"><input name="city" className={inputClass} /></Field>
+        <Field label="Name"><input name="name" required autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} /></Field>
         {formError && <Notice message={formError} tone="bad" />}
-        <ActionButton disabled={submitting}>{submitting ? "Adding outlet..." : "Add outlet"}</ActionButton>
+        <ActionButton disabled={submitting}>{submitting ? "Adding..." : "Add outlet"}</ActionButton>
       </form>
       <div className="space-y-4">
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
@@ -1228,33 +1226,24 @@ function OutletGroup({
         {outlets.map((outlet) => (
           <details key={outlet._id} className="p-4">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{outlet.name}</h3>
-                <p className="text-sm text-stone-600">
-                  {outlet.type} {outlet.city ? `- ${outlet.city}` : ""}
-                </p>
-              </div>
+              <h3 className="font-semibold">{outlet.name}</h3>
               <div className="flex items-center gap-2">
                 <Badge tone={outlet.status === "approved" ? "good" : outlet.status === "pending" ? "warn" : "bad"}>{renderOutletStatus(outlet.status)}</Badge>
                 <ChevronDown size={18} />
               </div>
             </summary>
             <form
-              className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 md:grid-cols-3"
+              className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[1fr_auto]"
               onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 void onUpdate(outlet._id, {
                   name: String(data.get("name") || ""),
-                  type: String(data.get("type") || ""),
-                  city: String(data.get("city") || ""),
                   status: data.get("status") as OutletStatus,
                 });
               }}
             >
               <Field label="Name"><input name="name" defaultValue={outlet.name} className={inputClass} required /></Field>
-              <Field label="Type"><input name="type" defaultValue={outlet.type} className={inputClass} /></Field>
-              <Field label="City"><input name="city" defaultValue={outlet.city} className={inputClass} /></Field>
               <Field label="Status">
                 <select name="status" defaultValue={outlet.status} className={inputClass}>
                   <option value="approved">Approved</option>
@@ -1262,12 +1251,12 @@ function OutletGroup({
                   <option value="archived">Archived</option>
                 </select>
               </Field>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-2 sm:col-span-2">
                 <ActionButton variant="secondary" disabled={busyAction === `${outlet._id}:save`}>{busyAction === `${outlet._id}:save` ? "Saving..." : "Save outlet"}</ActionButton>
                 {outlet.status !== "approved" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "approved")}>Approve</ActionButton>}
                 {outlet.status !== "archived" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "archived")}>Archive</ActionButton>}
               </div>
-              <div className="grid gap-2 md:col-span-3 md:grid-cols-[1fr_auto]">
+              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
                 <select
                   className={inputClass}
                   value={mergeTargets[outlet._id] || ""}
@@ -1275,7 +1264,7 @@ function OutletGroup({
                 >
                   <option value="">Merge into another outlet...</option>
                   {allOutlets.filter((item) => item._id !== outlet._id && item.status === "approved").map((item) => (
-                    <option key={item._id} value={item._id}>{item.name} - {item.city || "No city"}</option>
+                    <option key={item._id} value={item._id}>{item.name}</option>
                   ))}
                 </select>
                 <ActionButton
@@ -1623,7 +1612,7 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
   const filteredOutlets = approvedOutlets.filter((outlet) =>
-    `${outlet.name} ${outlet.city} ${outlet.type}`.toLowerCase().includes(outletSearch.toLowerCase()),
+    outlet.name.toLowerCase().includes(outletSearch.toLowerCase()),
   );
   const blockedReason =
     published.length === 0
@@ -1647,9 +1636,7 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
         body: JSON.stringify({
           eventId: form.get("eventId"),
           outletId: useNewOutlet ? undefined : form.get("outletId"),
-          newOutlet: useNewOutlet
-            ? { name: form.get("newOutletName"), type: form.get("newOutletType"), city: form.get("newOutletCity") }
-            : undefined,
+          newOutlet: useNewOutlet ? { name: form.get("newOutletName") } : undefined,
           recipientEmails: form.get("recipientEmails"),
           items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
           notes: form.get("notes"),
@@ -1700,22 +1687,18 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
             Propose a new outlet
           </label>
           {useNewOutlet ? (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Outlet name"><input name="newOutletName" className={inputClass} required={useNewOutlet} /></Field>
-              <Field label="Type"><input name="newOutletType" placeholder="Bar, restaurant, club" className={inputClass} /></Field>
-              <Field label="City"><input name="newOutletCity" className={inputClass} /></Field>
-            </div>
+            <Field label="Outlet name"><input name="newOutletName" autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} required={useNewOutlet} /></Field>
           ) : (
             <div className="grid gap-3">
               <Field label="Search outlet">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 text-stone-400" size={16} />
-                  <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search by name, city, or type" />
+                  <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search by name" />
                 </div>
               </Field>
               <Field label="Outlet">
                 <select name="outletId" className={inputClass} required={!useNewOutlet} disabled={filteredOutlets.length === 0}>
-                  {filteredOutlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name} - {outlet.city || "No city"}</option>)}
+                  {filteredOutlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name}</option>)}
                 </select>
               </Field>
             </div>
