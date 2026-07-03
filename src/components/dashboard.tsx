@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Download,
   LogOut,
   Mail,
@@ -24,6 +25,8 @@ import {
   Ticket,
   Users,
   X,
+  XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import {
   renderEventStatus,
@@ -644,11 +647,11 @@ export function Dashboard() {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-            <Kpi label="Total Requests" value={kpis.total} />
-            <Kpi label="Pending" value={kpis.pending} />
-            <Kpi label="Approved" value={kpis.approved} />
-            <Kpi label="Rejected" value={kpis.rejected} />
-            <Kpi label="Ticket Emails Sent" value={kpis.sent} />
+            <Kpi label="Total Requests" value={kpis.total} icon={Ticket} tone="gold" />
+            <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
+            <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
+            <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
+            <Kpi label="Ticket Emails Sent" value={kpis.sent} icon={Send} tone="neutral" />
           </div>
 
           {currentTab === "requests" && <AdminRequests requests={requests} events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
@@ -749,11 +752,28 @@ function NotificationDrawer({
   );
 }
 
-function Kpi({ label, value }: { label: string; value: number }) {
+const kpiTones = {
+  neutral: { bar: "bg-stone-300", chip: "bg-stone-100 text-stone-600" },
+  good: { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700" },
+  warn: { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700" },
+  bad: { bar: "bg-red-400", chip: "bg-red-50 text-red-700" },
+  gold: { bar: "bg-[#b8860b]", chip: "bg-[#fbf1da] text-[#8a6508]" },
+} as const;
+
+function Kpi({ label, value, icon: Icon, tone = "neutral" }: { label: string; value: number; icon: LucideIcon; tone?: keyof typeof kpiTones }) {
+  const palette = kpiTones[tone];
   return (
-    <div className="rounded-md border border-stone-200 bg-white p-3 shadow-sm">
-      <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    <div className="relative overflow-hidden rounded-md border border-stone-200 bg-white p-3 shadow-sm transition hover:shadow-md">
+      <span className={`absolute inset-y-0 left-0 w-1 ${palette.bar}`} aria-hidden />
+      <div className="flex items-start justify-between gap-2 pl-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tabular-nums">{value}</p>
+        </div>
+        <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${palette.chip}`}>
+          <Icon size={18} />
+        </span>
+      </div>
     </div>
   );
 }
@@ -1874,9 +1894,9 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
               <div className="grid grid-cols-3 gap-2">
                 <MiniMetric label="Requests" value={row.requests} />
                 <MiniMetric label="Tickets" value={row.tickets} />
-                <MiniMetric label="Approved" value={row.approved} />
-                <MiniMetric label="Pending" value={row.pending} />
-                <MiniMetric label="Rejected" value={row.rejected} />
+                <MiniMetric label="Approved" value={row.approved} tone="good" />
+                <MiniMetric label="Pending" value={row.pending} tone="warn" />
+                <MiniMetric label="Rejected" value={row.rejected} tone="bad" />
                 <MiniMetric label="Outlets" value={row.outlets.size} />
               </div>
               <p className="text-stone-600 xl:col-span-2">Outlets: {mapSummary(row.outlets, "No outlets")}</p>
@@ -1890,11 +1910,18 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
   );
 }
 
-function MiniMetric({ label, value }: { label: string; value: number }) {
+const miniMetricTones = {
+  neutral: "border-stone-200 bg-stone-50 text-stone-950",
+  good: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  warn: "border-amber-200 bg-amber-50 text-amber-800",
+  bad: "border-red-200 bg-red-50 text-red-800",
+} as const;
+
+function MiniMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
   return (
-    <div className="rounded-md border border-stone-200 bg-stone-50 p-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-stone-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+    <div className={`rounded-md border p-2 ${miniMetricTones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] opacity-70">{label}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -1942,7 +1969,36 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
+  const [quickAction, setQuickAction] = useState<"" | "approved" | "rejected">("");
   const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+
+  // One-click approve/reject for the common case, visible directly on the
+  // collapsed row so the manager never has to open a request just to approve
+  // it in full. Partial approval and note-taking still happen in the
+  // expanded detail below.
+  async function quickDecision(nextStatus: "approved" | "rejected") {
+    setQuickAction(nextStatus);
+    setActionError("");
+    try {
+      await api(`/api/requests/${request._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: nextStatus,
+          items: request.items.map((item) => ({
+            ...item,
+            approvedQuantity: nextStatus === "approved" ? item.quantity : 0,
+          })),
+        }),
+      });
+      notify(nextStatus === "approved" ? "Request approved." : "Request rejected.");
+      await onDone();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update the request.";
+      notify(message, "bad");
+    } finally {
+      setQuickAction("");
+    }
+  }
 
   async function update() {
     const nextItems = request.items.map((item, index) => {
@@ -2012,8 +2068,15 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     }
   }
 
+  const borderTones = {
+    neutral: "border-l-stone-300",
+    good: "border-l-emerald-400",
+    warn: "border-l-amber-400",
+    bad: "border-l-red-400",
+  } as const;
+
   return (
-    <details className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+    <details className={`overflow-hidden rounded-md border border-l-4 border-stone-250 bg-white p-4 shadow-sm transition hover:shadow-md ${borderTones[statusTone(request.status)]}`}>
       <summary className="grid cursor-pointer list-none gap-3 md:grid-cols-[1.5fr_1fr_auto] md:items-center">
         <div>
           <h3 className="text-lg font-semibold">{request.event?.name}</h3>
@@ -2025,9 +2088,39 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           {request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}
           <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
         </div>
-        <div className="flex items-center justify-between gap-2 text-sm text-stone-500 md:justify-end">
-          {formatShortDate(request.createdAt)}
-          <ChevronDown size={18} />
+        <div className="flex items-center justify-end gap-2">
+          {request.status === "pending" && (
+            <div className="flex items-center gap-2">
+              <ActionButton
+                type="button"
+                variant="primary"
+                className="min-h-9 px-3 text-xs"
+                disabled={quickAction !== ""}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void quickDecision("approved");
+                }}
+              >
+                <CheckCircle2 size={14} /> {quickAction === "approved" ? "Approving..." : "Approve"}
+              </ActionButton>
+              <ActionButton
+                type="button"
+                variant="secondary"
+                className="min-h-9 px-3 text-xs"
+                disabled={quickAction !== ""}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void quickDecision("rejected");
+                }}
+              >
+                <XCircle size={14} /> {quickAction === "rejected" ? "Rejecting..." : "Reject"}
+              </ActionButton>
+            </div>
+          )}
+          <span className="hidden text-sm text-stone-500 md:inline">{formatShortDate(request.createdAt)}</span>
+          <ChevronDown size={18} className="text-stone-400" />
         </div>
       </summary>
 
