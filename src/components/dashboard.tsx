@@ -242,7 +242,7 @@ function ActionButton({
 }
 
 export function LoginScreen() {
-  const [email, setEmail] = useState("amelillo@bacardi.com");
+  const [email, setEmail] = useState("");
   const [accessEmail, setAccessEmail] = useState("");
   const [accessName, setAccessName] = useState("");
   const [accessCompany, setAccessCompany] = useState("");
@@ -260,7 +260,11 @@ export function LoginScreen() {
     const result = await signIn("email", { email, redirect: false, callbackUrl: "/" });
     setSubmitting(false);
     if (result?.error) {
-      setError("This email is not approved yet. Use Request access to send your details to a manager.");
+      setError(
+        result.error === "CredentialsSignin"
+          ? "This email is not approved yet. Use Request access to send your details to a manager."
+          : "Sign-in is temporarily unavailable. Please try again in a moment.",
+      );
       return;
     }
     window.location.href = result?.url || "/";

@@ -155,3 +155,34 @@ Merge outlet e blocco utente partono senza dialog di conferma (il merge archivia
 7. **4.1 split dashboard** + 4.2 polling notifiche + 3.4 paginazione (refactor più grosso, da fare per ultimo e a tappe).
 
 Tutti i punti sono indipendenti tra loro salvo il gruppo 7; nessuno richiede migrazioni dati distruttive.
+
+---
+
+## Stato implementazione (aggiornato)
+
+### ✅ Risolti in questo branch
+- **1.2** Blocco utenti non più auto-annullato (`status` solo `$setOnInsert`, rifiuto login se `blocked`, env admin sempre ammessi).
+- **1.3** Rate limiting persistente su MongoDB con TTL index e comportamento fail-open (`src/lib/rate-limit.ts`, model `RateLimit`).
+- **1.4** Rimossa enumerazione email: risposta generica identica in tutti i casi su `POST /api/account-requests`.
+- **1.5** Escaping HTML di tutti i contenuti dinamici nelle email (`escapeHtml` in `mail.ts`).
+- **1.6** Gli errori 500 non espongono più il messaggio interno: log lato server + risposta generica.
+- **1.7** Validazione allegati in `send-ticket`: max 10 file, max 15 MB totali, estensioni consentite.
+- **1.8** Rimossa email personale hardcoded dal form di login (default vuoto).
+- **2.1** Rimosso il ramo morto di auto-approve in `send-ticket`.
+- **2.2** Rimossa `deliverOptionalEmail` (rami identici) → uso diretto di `deliverMail`.
+- **2.3** Filtro `dateTo` ora inclusivo del giorno stesso (helper `endOfDay`) in report e audit-log.
+- **2.4** `lastLoginAt` aggiornato solo al login effettivo (opzione `touchLogin`), non a ogni refresh JWT.
+- **2.6** Migrazione a `z.email()` (API Zod v4).
+- **3.1** Aggiunto `.env.example`.
+- **3.2** Aggiunta CI GitHub Actions (`.github/workflows/ci.yml`) che esegue lint + unit test + build.
+- **3.3** Aggiunti indici Mongo su `TicketRequest`, `AuditLog`, `AppNotification`, `AccountRequest`.
+- **3.6** `serializeDoc` ora usato in audit-logs (rimossa doppia serializzazione manuale).
+- **4.3** Messaggio di errore login distingue "email non approvata" da errore tecnico.
+- **5** Rimossi gli SVG residui del template Next e aggiunti test unitari (`tests/unit/security.test.ts`).
+
+Verifica: `npm run lint` pulito, `npm run test:unit` 15/15, `npm run build` OK.
+
+### ⏳ Deferiti volutamente (rischio/ampiezza — richiedono una decisione o un intervento dedicato)
+- **1.1 Autenticazione reale (magic link / OTP).** È la falla più importante ma la sostituzione va decisa con te: cambia l'esperienza di login per tutti gli utenti e richiede Resend con sender verificato. Implementarla "alla cieca" rischia di bloccare l'accesso se l'email non è configurata → contrario a "non rompere nulla". Da fare come intervento dedicato e concordato.
+- **1.9 / 2.5** Atomicità limite outlet e invio email singola multi-destinatario (miglioramenti mirati, non bloccanti).
+- **3.4 Paginazione** liste API + **4.1 split del `dashboard.tsx`** da 2.402 righe + **4.2 auto-refresh notifiche** + **4.5 i18n** + **4.6 a11y**: refactor ampi da fare a tappe, fuori dallo scope di un fix sicuro non-breaking.

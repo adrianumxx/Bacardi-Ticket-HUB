@@ -13,8 +13,12 @@ export function errorResponse(error: unknown) {
   if (error instanceof Error && error.name === "CastError") {
     return NextResponse.json({ error: "Invalid record identifier.", code: "INVALID_ID" }, { status: 400 });
   }
-  const message = error instanceof Error ? error.message : "Unexpected error";
-  return NextResponse.json({ error: message, code: "SERVER_ERROR" }, { status: 500 });
+  // Log the internal detail server-side but never leak it to the client.
+  console.error("[api:unhandled]", {
+    name: error instanceof Error ? error.name : "UnknownError",
+    message: error instanceof Error ? error.message : String(error),
+  });
+  return NextResponse.json({ error: "Unexpected server error. Please try again.", code: "SERVER_ERROR" }, { status: 500 });
 }
 
 export function badRequest(message: string, code = "BAD_REQUEST") {

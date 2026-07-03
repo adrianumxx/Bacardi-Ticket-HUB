@@ -53,6 +53,7 @@ const AccountRequestSchema = new Schema(
   },
   { timestamps: true },
 );
+AccountRequestSchema.index({ status: 1, createdAt: -1 });
 
 const TicketTypeSchema = new Schema(
   {
@@ -141,6 +142,10 @@ const TicketRequestSchema = new Schema(
   },
   { timestamps: true },
 );
+// Speeds up the per-outlet limit aggregation and the account-manager list view.
+TicketRequestSchema.index({ event: 1, outlet: 1, status: 1 });
+TicketRequestSchema.index({ requestedBy: 1, updatedAt: -1 });
+TicketRequestSchema.index({ updatedAt: -1 });
 
 const AuditLogSchema = new Schema(
   {
@@ -151,6 +156,17 @@ const AuditLogSchema = new Schema(
   },
   { timestamps: true },
 );
+AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.index({ actor: 1, createdAt: -1 });
+AuditLogSchema.index({ action: 1, createdAt: -1 });
+
+const RateLimitSchema = new Schema({
+  key: { type: String, required: true, unique: true },
+  count: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true },
+});
+// Mongo automatically removes expired buckets, keeping the collection small.
+RateLimitSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const AppNotificationSchema = new Schema(
   {
@@ -170,6 +186,8 @@ const AppNotificationSchema = new Schema(
   },
   { timestamps: true },
 );
+// Backs the inbox query (recipient + read filter, newest first).
+AppNotificationSchema.index({ recipient: 1, read: 1, createdAt: -1 });
 
 function model(name: string, schema: Schema) {
   if (process.env.NODE_ENV !== "production" && mongoose.models[name]) {
@@ -186,3 +204,4 @@ export const Outlet = model("Outlet", OutletSchema);
 export const TicketRequest = model("TicketRequest", TicketRequestSchema);
 export const AuditLog = model("AuditLog", AuditLogSchema);
 export const AppNotification = model("AppNotification", AppNotificationSchema);
+export const RateLimit = model("RateLimit", RateLimitSchema);

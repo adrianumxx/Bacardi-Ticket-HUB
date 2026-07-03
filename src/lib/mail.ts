@@ -67,11 +67,20 @@ export function adminNotifyEmails() {
     .filter(Boolean);
 }
 
+export function escapeHtml(value: string) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export function emailHtml(title: string, body: string) {
   return `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#181412">
-      <h1 style="font-size:20px;margin:0 0 12px">${title}</h1>
-      <p style="white-space:pre-line;margin:0">${body}</p>
+      <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(title)}</h1>
+      <p style="white-space:pre-line;margin:0">${escapeHtml(body)}</p>
       <p style="font-size:12px;color:#78716c;margin-top:20px">Bacardi Ticket Hub</p>
     </div>
   `;
