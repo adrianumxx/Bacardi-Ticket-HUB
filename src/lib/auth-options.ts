@@ -68,6 +68,10 @@ export const authOptions: NextAuthOptions = {
           token.id = String(profile._id);
           token.role = profile.role;
           token.status = profile.status;
+          // Keep the session's display name in sync with Settings updates:
+          // ensureAllowedProfile never overwrites an existing name, so the DB
+          // value here always reflects the latest save.
+          if (profile.name) token.name = profile.name;
         }
       }
       return token;

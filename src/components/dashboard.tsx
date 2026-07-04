@@ -21,8 +21,10 @@ import {
   RefreshCcw,
   Search,
   Send,
+  Settings,
   Store,
   Ticket,
+  UserCircle,
   Users,
   X,
   XCircle,
@@ -469,10 +471,12 @@ export function Dashboard() {
             ["events", "Events & festivals", CalendarDays],
             ["users", "Users", Users],
             ["reports", "Reports", BarChart3],
+            ["settings", "Settings", Settings],
           ]
         : [
             ["new-request", "New request", Plus],
             ["mine", "My requests", Ticket],
+            ["settings", "Settings", Settings],
           ],
     [role],
   );
@@ -662,6 +666,7 @@ export function Dashboard() {
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
+          {currentTab === "settings" && <SettingsPanel notify={showNotice} />}
         </section>
       </div>
     </main>
@@ -2074,7 +2079,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
 
         <SendTicketPanel request={request} onDone={onDone} notify={notify} />
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <HistoryList history={request.history} />
           <DispatchList dispatches={request.dispatches} />
         </div>
@@ -2149,6 +2154,79 @@ function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; on
         </article>
       ))}
       {requests.length === 0 && <EmptyState text="You have not created any requests yet." />}
+    </div>
+  );
+}
+
+function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => void }) {
+  const { data: session, update } = useSession();
+  const role = session?.user?.role as Role | undefined;
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loadedName, setLoadedName] = useState<string | null>(null);
+
+  // Seed the editable fields once the session's name becomes available.
+  // Adjusting state during render (React's recommended pattern for syncing
+  // from a prop/external value) instead of an effect avoids an extra render.
+  const sessionName = session?.user?.name ?? null;
+  if (sessionName !== null && sessionName !== loadedName) {
+    setLoadedName(sessionName);
+    const [first, ...rest] = sessionName.trim().split(/\s+/).filter(Boolean);
+    setFirstName(first || "");
+    setLastName(rest.join(" "));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!firstName.trim()) return notify("First name is required.", "bad");
+    setSaving(true);
+    try {
+      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName }) });
+      await update();
+      notify("Profile updated.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update your profile.", "bad");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+            <UserCircle size={22} />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">My account</p>
+            <h2 className="text-lg font-semibold">Settings</h2>
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="mt-5 grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="First name">
+              <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} required />
+            </Field>
+            <Field label="Last name">
+              <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
+            </Field>
+          </div>
+          <Field label="Email" hint="Contact a manager to change the email tied to your account.">
+            <input className={inputClass} value={session?.user?.email || ""} disabled />
+          </Field>
+          <Field label="Role" hint="Roles are managed by a manager in the Users section.">
+            <div>
+              <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
+            </div>
+          </Field>
+          <div>
+            <ActionButton disabled={saving}>{saving ? "Saving..." : "Save changes"}</ActionButton>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
