@@ -734,7 +734,7 @@ function NotificationDrawer({
 
   async function deleteSelected() {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.length} selected notification(s)? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected notification${selectedIds.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
     await onDeleteMany(selectedIds);
     setSelectedIds([]);
     setSelecting(false);
@@ -748,7 +748,7 @@ function NotificationDrawer({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Notifications</p>
             <h2 className="mt-1 text-xl font-semibold">Inbox</h2>
-            <p className="mt-1 text-sm text-stone-600">{unreadCount} unread notification(s)</p>
+            <p className="mt-1 text-sm text-stone-600">{unreadCount} unread notification{unreadCount === 1 ? "" : "s"}</p>
           </div>
           <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close">
             <X size={18} />
@@ -1008,7 +1008,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
       const result = await api<{ affectedRequests: number }>(`/api/events/${event._id}`, { method: "DELETE" });
       notify(
         result.affectedRequests > 0
-          ? `Sponsored item deleted. ${result.affectedRequests} existing ticket request(s) keep their history but no longer reference an event.`
+          ? `Sponsored item deleted. ${result.affectedRequests} existing ticket request${result.affectedRequests === 1 ? "" : "s"} keep their history but no longer reference an event.`
           : "Sponsored item deleted.",
       );
       await onDone();
@@ -2050,7 +2050,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
   const [sending, setSending] = useState(false);
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
-  const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+  const defaultMessage = `Attached are the approved ticket files for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
 
   async function sendTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2133,7 +2133,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Confirm dispatch</p>
             <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              Send {pendingSend.fileCount} attachment(s) to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
+              Send {pendingSend.fileCount} attachment{pendingSend.fileCount === 1 ? "" : "s"} to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
             </p>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
@@ -2663,14 +2663,14 @@ function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <h3 className="text-sm font-semibold">Tickets requested over time</h3>
-      <p className="mt-0.5 text-xs text-stone-500">Daily requested ticket volume, last {byDay.length || 0} day(s) with activity in the current filters.</p>
+      <p className="mt-0.5 text-xs text-stone-500">Daily requested ticket volume, last {byDay.length || 0} day{byDay.length === 1 ? "" : "s"} with activity in the current filters.</p>
       {byDay.length === 0 ? (
         <div className="mt-4"><EmptyState text="No dated requests match the current filters." /></div>
       ) : (
         <div className="relative mt-5">
           {hoverIndex !== null && (
             <div className="pointer-events-none absolute -top-2 left-0 -translate-y-full rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs shadow-lg" style={{ left: `${(hoverIndex / byDay.length) * 100}%` }}>
-              <p className="font-semibold text-stone-800">{byDay[hoverIndex][1]} ticket(s)</p>
+              <p className="font-semibold text-stone-800">{byDay[hoverIndex][1]} ticket{byDay[hoverIndex][1] === 1 ? "" : "s"}</p>
               <p className="text-stone-500">{formatShortDate(byDay[hoverIndex][0])}</p>
             </div>
           )}
@@ -2723,7 +2723,7 @@ function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <h3 className="text-sm font-semibold">Requests by status</h3>
-      <p className="mt-0.5 text-xs text-stone-500">Share of the {total} request(s) matching the current filters.</p>
+      <p className="mt-0.5 text-xs text-stone-500">Share of the {total} request{total === 1 ? "" : "s"} matching the current filters.</p>
       {total === 0 ? (
         <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
       ) : (
@@ -2897,7 +2897,7 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InsightMetric label="Approval rate" value={`${approvalRate}%`} detail={`${approved} approved or partially approved of ${totalRequests} request(s).`} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
+        <InsightMetric label="Approval rate" value={`${approvalRate}%`} detail={`${approved} approved or partially approved of ${totalRequests} request${totalRequests === 1 ? "" : "s"}.`} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
         <InsightMetric label="Average tickets" value={avgTickets} detail="Requested tickets per request in the current filter." />
         <InsightMetric label="Pending queue" value={pending} detail="Requests still waiting for a manager decision." tone={pending > 0 ? "warn" : "good"} />
         <InsightMetric label="Ticket emails" value={totalDispatches} detail="Dispatch records created after ticket files were sent." />

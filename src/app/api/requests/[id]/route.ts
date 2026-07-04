@@ -15,6 +15,7 @@ import {
 } from "@/lib/request-rules";
 import { notifyUser } from "@/lib/notifications";
 import { auditLog } from "@/lib/audit";
+import { pluralize } from "@/lib/utils";
 
 type RequestItemLine = TicketLineInput & {
   toObject?: () => TicketLineInput;
@@ -59,7 +60,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const existingQty = await usedTicketsForOutlet(String(eventDoc._id), String(outletDoc._id), id);
       if (existingQty + nextQty > eventDoc.maxTicketsPerOutlet) {
         return badRequest(
-          `Outlet limit exceeded: ${existingQty} ticket(s) already reserved by other requests, maximum ${eventDoc.maxTicketsPerOutlet}.`,
+          `Outlet limit exceeded: ${pluralize(existingQty, "ticket")} already reserved by other requests, maximum ${eventDoc.maxTicketsPerOutlet}.`,
         );
       }
     }
@@ -117,7 +118,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         current.items = previousItems;
         await current.save();
         return badRequest(
-          `Outlet limit exceeded: another update was made at the same time. Maximum ${eventDoc.maxTicketsPerOutlet} ticket(s) per outlet.`,
+          `Outlet limit exceeded: another update was made at the same time. Maximum ${pluralize(eventDoc.maxTicketsPerOutlet, "ticket")} per outlet.`,
         );
       }
     }
