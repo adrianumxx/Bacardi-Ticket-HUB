@@ -919,8 +919,12 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
     if (!window.confirm(`Delete "${event.name}" permanently? This cannot be undone.`)) return;
     setEventActionId(event._id);
     try {
-      await api(`/api/events/${event._id}`, { method: "DELETE" });
-      notify("Sponsored item deleted.");
+      const result = await api<{ affectedRequests: number }>(`/api/events/${event._id}`, { method: "DELETE" });
+      notify(
+        result.affectedRequests > 0
+          ? `Sponsored item deleted. ${result.affectedRequests} existing ticket request(s) keep their history but no longer reference an event.`
+          : "Sponsored item deleted.",
+      );
       await onDone();
     } catch (error) {
       notify(error instanceof Error ? error.message : "Unable to delete the sponsored item.", "bad");
