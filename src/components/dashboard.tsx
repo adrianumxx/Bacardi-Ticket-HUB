@@ -1405,6 +1405,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
   const [outletRows, setOutletRows] = useState([{ id: "outlet-1", name: "", quantity: 1 }]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [submittedMessage, setSubmittedMessage] = useState("");
   const effectiveEventId = eventId || published[0]?._id || "";
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
@@ -1444,6 +1445,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
     const form = new FormData(formElement);
     setSubmitting(true);
     setFormError("");
+    setSubmittedMessage("");
     try {
       await api("/api/requests", {
         method: "POST",
@@ -1458,7 +1460,12 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
       formElement.reset();
       outletIdCounter.current = 1;
       setOutletRows([{ id: "outlet-1", name: "", quantity: 1 }]);
-      notify(validOutletRows.length > 1 ? `${validOutletRows.length} requests submitted for manager review.` : "Request submitted for manager review.");
+      const successMessage =
+        validOutletRows.length > 1
+          ? `${validOutletRows.length} requests were sent to the manager for review.`
+          : "Your request was sent to the manager for review.";
+      setSubmittedMessage(successMessage);
+      notify(successMessage);
       await onDone();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit the request.";
@@ -1574,7 +1581,24 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
           </p>
           {blockedReason && <Notice message={blockedReason} tone="bad" />}
           {formError && <Notice message={formError} tone="bad" />}
-          <ActionButton disabled={Boolean(blockedReason) || submitting}>{submitting ? "Submitting request..." : "Submit request"}</ActionButton>
+          {submittedMessage && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
+                <div className="grid gap-3">
+                  <div>
+                    <p className="font-semibold">Request sent</p>
+                    <p className="mt-1">{submittedMessage}</p>
+                  </div>
+                  <ActionButton type="button" variant="secondary" className="w-fit" onClick={() => setSubmittedMessage("")}>
+                    <Plus size={16} />
+                    Send another request
+                  </ActionButton>
+                </div>
+              </div>
+            </div>
+          )}
+          {!submittedMessage && <ActionButton disabled={Boolean(blockedReason) || submitting}>{submitting ? "Submitting request..." : "Submit request"}</ActionButton>}
         </div>
       </Step>
       </div>
