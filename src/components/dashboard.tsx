@@ -32,7 +32,6 @@ import {
   renderEventStatus,
   renderHistoryAction,
   renderHistoryMessage,
-  renderOutletStatus,
   renderRequestStatus,
   type EventStatus,
   type OutletStatus,
@@ -477,7 +476,6 @@ export function Dashboard() {
         ? [
             ["requests", "Requests", Ticket],
             ["events", "Events & festivals", CalendarDays],
-            ["outlets", "Outlets", Store],
             ["users", "Users", Users],
             ["reports", "Reports", BarChart3],
           ]
@@ -577,7 +575,7 @@ export function Dashboard() {
           onFilter={setNotificationFilter}
           onClose={() => setNotificationsOpen(false)}
           onOpenEntity={(category) => {
-            const target = category === "accounts" || category === "users" ? "users" : category === "outlets" ? "outlets" : category === "events" ? "events" : category === "reports" ? "reports" : role === "super_admin" ? "requests" : "mine";
+            const target = category === "accounts" || category === "users" ? "users" : category === "events" || category === "outlets" ? "events" : category === "reports" ? "reports" : role === "super_admin" ? "requests" : "mine";
             openTab(target);
             setNotificationsOpen(false);
           }}
@@ -665,7 +663,6 @@ export function Dashboard() {
 
           {currentTab === "requests" && <AdminRequests requests={requests} events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "events" && <EventsPanel events={events} onDone={refresh} notify={showNotice} />}
-          {currentTab === "outlets" && <OutletsPanel outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
@@ -1061,210 +1058,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         </div>
       </div>
     </div>
-  );
-}
-
-function OutletsPanel({ outlets, onDone, notify }: { outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [busyAction, setBusyAction] = useState("");
-  const [outletSearch, setOutletSearch] = useState("");
-  const [formError, setFormError] = useState("");
-  const visibleOutlets = outlets.filter((outlet) =>
-    [outlet.name, outlet.status].join(" ").toLowerCase().includes(outletSearch.toLowerCase()),
-  );
-  const pending = visibleOutlets.filter((outlet) => outlet.status === "pending");
-  const approved = visibleOutlets.filter((outlet) => outlet.status === "approved");
-  const archived = visibleOutlets.filter((outlet) => outlet.status === "archived");
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    setSubmitting(true);
-    setFormError("");
-    try {
-      await api("/api/outlets", {
-        method: "POST",
-        body: JSON.stringify({ name: form.get("name"), status: "approved" }),
-      });
-      formElement.reset();
-      notify("Outlet added.");
-      await onDone();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to add the outlet.";
-      setFormError(message);
-      notify(message, "bad");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function setStatus(id: string, status: OutletStatus) {
-    setBusyAction(`${id}:status`);
-    try {
-      await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
-      notify(status === "approved" ? "Outlet approved." : "Outlet archived.");
-      await onDone();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to update the outlet status.", "bad");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function updateOutlet(id: string, payload: Partial<Outlet>) {
-    setBusyAction(`${id}:save`);
-    try {
-      await api(`/api/outlets/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
-      notify("Outlet updated.");
-      await onDone();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to update the outlet.", "bad");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function mergeOutlet(id: string, targetOutletId: string) {
-    setBusyAction(`${id}:merge`);
-    try {
-      await api(`/api/outlets/${id}`, { method: "POST", body: JSON.stringify({ targetOutletId }) });
-      notify("Outlet merged and request history preserved.");
-      await onDone();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to merge the outlet.", "bad");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(300px,360px)_1fr]">
-      <form onSubmit={submit} className="space-y-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Outlet registry</p>
-          <h2 className="mt-1 text-lg font-semibold">Add outlet</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">Give it a name so account managers can select it for ticket requests.</p>
-        </div>
-        <Field label="Name"><input name="name" required autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} /></Field>
-        {formError && <Notice message={formError} tone="bad" />}
-        <ActionButton disabled={submitting}>{submitting ? "Adding..." : "Add outlet"}</ActionButton>
-      </form>
-      <div className="space-y-4">
-        <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-          <Field label="Search outlets">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 text-stone-400" size={16} />
-              <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search name, city, type, or status" />
-            </div>
-          </Field>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <CountPill label="Pending" value={pending.length} />
-          <CountPill label="Approved" value={approved.length} />
-          <CountPill label="Archived" value={archived.length} />
-        </div>
-        <OutletGroup title="Pending proposed outlets" outlets={pending} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Review outlets proposed by account managers before they become selectable." />
-        <OutletGroup title="Approved outlets" outlets={approved} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Approved outlets are available in the account manager request flow." />
-        {archived.length > 0 && <OutletGroup title="Archived outlets" outlets={archived} allOutlets={outlets} busyAction={busyAction} onStatus={setStatus} onUpdate={updateOutlet} onMerge={mergeOutlet} description="Archived outlets stay in history but are removed from normal selection." />}
-      </div>
-    </div>
-  );
-}
-
-function OutletGroup({
-  title,
-  outlets,
-  allOutlets,
-  busyAction,
-  onStatus,
-  onUpdate,
-  onMerge,
-  description,
-}: {
-  title: string;
-  outlets: Outlet[];
-  allOutlets: Outlet[];
-  busyAction: string;
-  onStatus: (id: string, status: OutletStatus) => Promise<void>;
-  onUpdate: (id: string, payload: Partial<Outlet>) => Promise<void>;
-  onMerge: (id: string, targetOutletId: string) => Promise<void>;
-  description?: string;
-}) {
-  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
-  return (
-    <section className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
-      <PanelIntro eyebrow="Outlets" title={title} description={description} meta={<CountPill label="Total" value={outlets.length} />} />
-      <div className="divide-y">
-        {outlets.map((outlet) => (
-          <details key={outlet._id} className="p-4">
-            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
-              <h3 className="font-semibold">{outlet.name}</h3>
-              <div className="flex items-center gap-2">
-                <Badge tone={outlet.status === "approved" ? "good" : outlet.status === "pending" ? "warn" : "bad"}>{renderOutletStatus(outlet.status)}</Badge>
-                <ChevronDown size={18} />
-              </div>
-            </summary>
-            <form
-              className="mt-4 grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 sm:grid-cols-[1fr_auto]"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-                void onUpdate(outlet._id, {
-                  name: String(data.get("name") || ""),
-                  status: data.get("status") as OutletStatus,
-                });
-              }}
-            >
-              <Field label="Name"><input name="name" defaultValue={outlet.name} className={inputClass} required /></Field>
-              <Field label="Status">
-                <select name="status" defaultValue={outlet.status} className={inputClass}>
-                  <option value="approved">Approved</option>
-                  <option value="pending">Pending review</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </Field>
-              <div className="flex items-end gap-2 sm:col-span-2">
-                <ActionButton variant="secondary" disabled={busyAction === `${outlet._id}:save`}>{busyAction === `${outlet._id}:save` ? "Saving..." : "Save outlet"}</ActionButton>
-                {outlet.status !== "approved" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "approved")}>Approve</ActionButton>}
-                {outlet.status !== "archived" && <ActionButton type="button" variant="ghost" disabled={busyAction === `${outlet._id}:status`} onClick={() => void onStatus(outlet._id, "archived")}>Archive</ActionButton>}
-              </div>
-              <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
-                <select
-                  className={inputClass}
-                  value={mergeTargets[outlet._id] || ""}
-                  onChange={(event) => setMergeTargets((current) => ({ ...current, [outlet._id]: event.target.value }))}
-                >
-                  <option value="">Merge into another outlet...</option>
-                  {allOutlets.filter((item) => item._id !== outlet._id && item.status === "approved").map((item) => (
-                    <option key={item._id} value={item._id}>{item.name}</option>
-                  ))}
-                </select>
-                <ActionButton
-                  type="button"
-                  variant="secondary"
-                  disabled={!mergeTargets[outlet._id] || busyAction === `${outlet._id}:merge`}
-                  onClick={() => {
-                    const targetId = mergeTargets[outlet._id];
-                    const targetName = allOutlets.find((item) => item._id === targetId)?.name || "the selected outlet";
-                    if (
-                      window.confirm(
-                        `Merge "${outlet.name}" into "${targetName}"? This archives "${outlet.name}" and moves all of its ticket requests to "${targetName}". This cannot be undone.`,
-                      )
-                    ) {
-                      void onMerge(outlet._id, targetId);
-                    }
-                  }}
-                >
-                  {busyAction === `${outlet._id}:merge` ? "Merging..." : "Merge"}
-                </ActionButton>
-              </div>
-            </form>
-          </details>
-        ))}
-        {outlets.length === 0 && <div className="p-4"><EmptyState text="No outlets in this group." /></div>}
-      </div>
-    </section>
   );
 }
 
@@ -2288,6 +2081,190 @@ function MinePanel({ requests }: { requests: TicketRequest[] }) {
   );
 }
 
+type ReportRow = Record<string, string | number>;
+
+// Single-hue gold ramp, validated for a sequential/ordinal magnitude encoding
+// (light->dark, monotonic lightness, clears contrast at the light end).
+const magnitudeRamp = ["#d4af37", "#c19323", "#a97815", "#8a6508", "#5f4506"];
+
+const statusChartColors: Record<string, string> = {
+  Pending: "#a8a29e",
+  Approved: "#10b981",
+  "Partially approved": "#f59e0b",
+  Rejected: "#ef4444",
+};
+
+function rankedTotals(rows: ReportRow[], key: string, limit = 8) {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const label = String(row[key] || "Unknown").trim() || "Unknown";
+    totals.set(label, (totals.get(label) ?? 0) + Number(row.quantity || 0));
+  }
+  return [...totals.entries()]
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+}
+
+function RankedBarChart({ title, subtitle, data, emptyText }: { title: string; subtitle: string; data: [string, number][]; emptyText: string }) {
+  const max = Math.max(...data.map(([, value]) => value), 1);
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
+      {data.length === 0 ? (
+        <div className="mt-4"><EmptyState text={emptyText} /></div>
+      ) : (
+        <div className="mt-4 space-y-2.5">
+          {data.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-stone-700" title={label}>{label}</p>
+                <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.max(4, (value / max) * 100)}%`, background: magnitudeRamp[0] }}
+                  />
+                </div>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-stone-800">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const byDay = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const row of rows) {
+      const createdAt = row.createdAt ? new Date(row.createdAt) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) continue;
+      const key = createdAt.toISOString().slice(0, 10);
+      totals.set(key, (totals.get(key) ?? 0) + Number(row.quantity || 0));
+    }
+    return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-30);
+  }, [rows]);
+  const max = Math.max(...byDay.map(([, value]) => value), 1);
+
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold">Tickets requested over time</h3>
+      <p className="mt-0.5 text-xs text-stone-500">Daily requested ticket volume, last {byDay.length || 0} day(s) with activity in the current filters.</p>
+      {byDay.length === 0 ? (
+        <div className="mt-4"><EmptyState text="No dated requests match the current filters." /></div>
+      ) : (
+        <div className="relative mt-5">
+          {hoverIndex !== null && (
+            <div className="pointer-events-none absolute -top-2 left-0 -translate-y-full rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs shadow-lg" style={{ left: `${(hoverIndex / byDay.length) * 100}%` }}>
+              <p className="font-semibold text-stone-800">{byDay[hoverIndex][1]} ticket(s)</p>
+              <p className="text-stone-500">{formatShortDate(byDay[hoverIndex][0])}</p>
+            </div>
+          )}
+          <div className="flex h-32 items-end gap-1">
+            {byDay.map(([day, value], index) => (
+              <div
+                key={day}
+                className="group flex-1 cursor-default"
+                onMouseEnter={() => setHoverIndex(index)}
+                onMouseLeave={() => setHoverIndex((current) => (current === index ? null : current))}
+              >
+                <div
+                  className="mx-auto w-full rounded-t transition-all group-hover:opacity-80"
+                  style={{ height: `${Math.max(3, (value / max) * 100)}%`, background: magnitudeRamp[0] }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-stone-400">
+            <span>{formatShortDate(byDay[0][0])}</span>
+            <span>{formatShortDate(byDay[byDay.length - 1][0])}</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
+  const totals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      const status = String(row.status || "Unknown");
+      map.set(status, (map.get(status) ?? 0) + 1);
+    }
+    return [...map.entries()].filter(([, count]) => count > 0);
+  }, [rows]);
+  const total = totals.reduce((sum, [, count]) => sum + count, 0);
+
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold">Requests by status</h3>
+      <p className="mt-0.5 text-xs text-stone-500">Share of the {total} request(s) matching the current filters.</p>
+      {total === 0 ? (
+        <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
+      ) : (
+        <>
+          <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-stone-100">
+            {totals.map(([status, count]) => (
+              <div
+                key={status}
+                className="h-full first:rounded-l-full last:rounded-r-full"
+                style={{ width: `${(count / total) * 100}%`, background: statusChartColors[status] || "#a8a29e", marginRight: 2 }}
+                title={`${status}: ${count}`}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+            {totals.map(([status, count]) => (
+              <div key={status} className="flex items-center gap-1.5 text-xs">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusChartColors[status] || "#a8a29e" }} />
+                <span className="text-stone-700">{status}</span>
+                <span className="font-semibold tabular-nums text-stone-900">{count}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
+  const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const uniqueManagers = new Set(rows.map((row) => String(row.accountManager || ""))).size;
+  const uniqueOutlets = new Set(rows.map((row) => String(row.outlet || ""))).size;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
+        <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
+        <Kpi label="Outlets Involved" value={uniqueOutlets} icon={Store} tone="neutral" />
+      </div>
+      <TicketsOverTimeChart rows={rows} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <RankedBarChart
+          title="Tickets by account manager"
+          subtitle="Top requesters by ticket volume in the current filters."
+          data={rankedTotals(rows, "accountManager")}
+          emptyText="No account manager activity in the current filters."
+        />
+        <RankedBarChart
+          title="Tickets by outlet"
+          subtitle="Which clients are requesting the most tickets."
+          data={rankedTotals(rows, "outlet")}
+          emptyText="No outlet activity in the current filters."
+        />
+      </div>
+      <StatusBreakdownChart rows={rows} />
+    </div>
+  );
+}
+
 function ReportsPanel() {
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -2416,6 +2393,8 @@ function ReportsPanel() {
 
   return (
     <div className="space-y-4">
+      <AnalyticsSection rows={filteredRows} />
+
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Request report</h2>
