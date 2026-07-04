@@ -7,6 +7,7 @@ import { adminNotifyEmails, emailHtml } from "@/lib/mail";
 import { requestedQuantity, usedTicketsForOutlet, validateTicketTypes } from "@/lib/request-rules";
 import { notifyAdmins, notifyUser } from "@/lib/notifications";
 import { auditLog } from "@/lib/audit";
+import { pluralize } from "@/lib/utils";
 
 type LeanEvent = {
   _id: unknown;
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
 
       if (requestedQty > event.maxTicketsPerOutlet) {
         return rollbackAndBadRequest(
-          `This event or festival allows a maximum of ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
+          `This event or festival allows a maximum of ${pluralize(event.maxTicketsPerOutlet, "ticket")} per outlet.`,
         );
       }
 
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
       const existingQty = await usedTicketsForOutlet(input.eventId, outletId);
       if (existingQty + requestedQty > event.maxTicketsPerOutlet) {
         return rollbackAndBadRequest(
-          `Outlet limit exceeded for ${outlet.name}: ${existingQty} ticket(s) already requested, maximum ${event.maxTicketsPerOutlet}.`,
+          `Outlet limit exceeded for ${outlet.name}: ${pluralize(existingQty, "ticket")} already requested, maximum ${event.maxTicketsPerOutlet}.`,
         );
       }
 
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
       if (confirmedQty > event.maxTicketsPerOutlet) {
         await TicketRequest.deleteOne({ _id: ticketRequest._id });
         return rollbackAndBadRequest(
-          `Outlet limit exceeded for ${outlet.name}: another request was submitted at the same time. Maximum ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
+          `Outlet limit exceeded for ${outlet.name}: another request was submitted at the same time. Maximum ${pluralize(event.maxTicketsPerOutlet, "ticket")} per outlet.`,
         );
       }
 
@@ -163,14 +164,14 @@ export async function POST(request: Request) {
         entityType: "ticket_request",
         entityId: String(ticketRequest._id),
         title: "New sponsorship ticket request",
-        message: `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
+        message: `${user.name} requested ${pluralize(requestedQty, "ticket")} for ${outlet.name}.\nEvent/Festival: ${event.name}`,
         priority: "high",
         email: {
           subject: adminSubject,
           replyTo: user.email,
           html: emailHtml(
             "New sponsorship ticket request",
-            `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
+            `${user.name} requested ${pluralize(requestedQty, "ticket")} for ${outlet.name}.\nEvent/Festival: ${event.name}`,
           ),
         },
       });

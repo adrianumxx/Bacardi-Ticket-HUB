@@ -29,7 +29,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const formData = await request.formData();
     const recipients = splitEmails(String(formData.get("recipients") || ""));
     const subject = String(formData.get("subject") || "Your Bacardi tickets");
-    const message = String(formData.get("message") || "Attached are the approved ticket file(s).");
+    const message = String(formData.get("message") || "Attached are the approved ticket files.");
     const parsed = sendTicketSchema.parse({ recipients, subject, message });
     const files = formData.getAll("files").filter((file): file is File => file instanceof File);
 
