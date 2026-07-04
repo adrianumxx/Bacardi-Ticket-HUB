@@ -1434,8 +1434,7 @@ function UserTable({
         <h2 className="text-sm font-semibold">{title}</h2>
         <CountPill label="Users" value={rows.length} />
       </div>
-      <div className="hidden grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] gap-3 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">
-        <span>User</span>
+      <div className="hidden grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] gap-3 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">        <span>User</span>
         <span>Role</span>
         <span>Team</span>
         <span>Status</span>
@@ -1482,8 +1481,7 @@ function UserTable({
             )}
             <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
             <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved" : "Missing"}</Badge>
-            <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">
-              <ActionButton
+            <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">              <ActionButton
                 variant="secondary"
                 disabled={busyEmail === user.email}
                 className="min-h-7 px-2.5 text-[11px]"
