@@ -506,12 +506,12 @@ export function Dashboard() {
             <ActionButton
               type="button"
               variant="secondary"
-              className="h-10 w-10 min-h-0 px-0 lg:hidden"
+              className="h-11 w-11 min-h-0 px-0 lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
               aria-expanded={mobileNavOpen}
             >
-              <Menu size={19} />
+              <Menu size={22} />
             </ActionButton>
             <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={44} height={44} className="h-11 w-11 shrink-0 object-contain" priority unoptimized />
             <div className="min-w-0">
@@ -523,35 +523,35 @@ export function Dashboard() {
             <ActionButton
               type="button"
               variant="secondary"
-              className="hidden h-10 w-10 min-h-0 px-0 lg:inline-flex"
+              className="hidden h-11 w-11 min-h-0 px-0 lg:inline-flex"
               onClick={() => setSidebarCollapsed((current) => !current)}
               title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             >
-              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+              {sidebarCollapsed ? <PanelLeftOpen size={22} /> : <PanelLeftClose size={22} />}
             </ActionButton>
             <div className="glass-pill hidden items-center gap-2 rounded-full border border-stone-200/70 bg-white/70 px-3 py-2 sm:flex">
               <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
-            <ActionButton type="button" variant="secondary" className="h-10 w-10 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
-              <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
+            <ActionButton type="button" variant="secondary" className="h-11 w-11 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
+              <RefreshCcw size={22} className={loading ? "animate-spin" : ""} />
             </ActionButton>
             <ActionButton
               type="button"
               variant="secondary"
-              className="relative h-10 w-10 min-h-0 px-0"
+              className="relative h-11 w-11 min-h-0 px-0"
               onClick={() => setNotificationsOpen(true)}
               title="Notifications"
             >
-              <Bell size={18} />
+              <Bell size={22} />
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#b8860b] px-1 text-[10px] font-bold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" className="h-10 w-10 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
-              <LogOut size={18} />
+            <ActionButton type="button" variant="secondary" className="h-11 w-11 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
+              <LogOut size={22} />
             </ActionButton>
           </div>
         </div>
