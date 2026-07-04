@@ -43,3 +43,6 @@ test-results/
 next-env.d.ts
 
 .vercel
+
+# graphify (local knowledge-graph analysis output, not part of the app)
+/graphify-out/
