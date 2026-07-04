@@ -587,6 +587,10 @@ export function Dashboard() {
             await api(`/api/notifications/${id}`, { method: "DELETE" });
             await loadNotifications();
           }}
+          onDeleteMany={async (ids) => {
+            await api("/api/notifications", { method: "DELETE", body: JSON.stringify({ ids }) });
+            await loadNotifications();
+          }}
         />
       )}
 
@@ -686,6 +690,7 @@ function NotificationDrawer({
   onRead,
   onReadAll,
   onDelete,
+  onDeleteMany,
 }: {
   notifications: AppNotification[];
   unreadCount: number;
@@ -696,7 +701,10 @@ function NotificationDrawer({
   onRead: (id: string, read: boolean) => Promise<void>;
   onReadAll: () => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onDeleteMany: (ids: string[]) => Promise<void>;
 }) {
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const filters: { id: "all" | "unread" | AppNotification["category"]; label: string }[] = [
     { id: "all", label: "All" },
     { id: "unread", label: "Unread" },
@@ -704,6 +712,32 @@ function NotificationDrawer({
     { id: "accounts", label: "Accounts" },
     { id: "tickets", label: "Tickets" },
   ];
+  const visibleIds = notifications.map((notification) => notification._id);
+  const selectedSet = new Set(selectedIds);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => {
+      const currentSet = new Set(current);
+      if (allVisibleSelected) {
+        return current.filter((id) => !visibleIds.includes(id));
+      }
+      for (const id of visibleIds) currentSet.add(id);
+      return [...currentSet];
+    });
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected notification(s)? This cannot be undone.`)) return;
+    await onDeleteMany(selectedIds);
+    setSelectedIds([]);
+    setSelecting(false);
+  }
 
   return (
     <div className="fixed inset-0 z-[70]">
@@ -733,16 +767,51 @@ function NotificationDrawer({
               </ActionButton>
             ))}
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                type="button"
+                variant={selecting ? "primary" : "secondary"}
+                className="min-h-9 px-3 text-xs"
+                onClick={() => {
+                  setSelecting((current) => !current);
+                  setSelectedIds([]);
+                }}
+              >
+                {selecting ? "Cancel selection" : "Select"}
+              </ActionButton>
+              {selecting && (
+                <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={toggleAllVisible} disabled={notifications.length === 0}>
+                  {allVisibleSelected ? "Clear visible" : "Select all visible"}
+                </ActionButton>
+              )}
+            </div>
             <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => void onReadAll()}>
               Mark all read
             </ActionButton>
           </div>
+          {selecting && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-stone-200 bg-stone-50 p-2">
+              <span className="text-xs font-medium text-stone-600">{selectedIds.length} selected</span>
+              <ActionButton type="button" variant="ghost" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void deleteSelected()}>
+                Delete selected
+              </ActionButton>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {notifications.map((notification) => (
             <article key={notification._id} className={`border-b border-stone-100 p-4 ${notification.read ? "bg-white" : "bg-amber-50/50"}`}>
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {selecting && (
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-[#EB6A1C]"
+                    checked={selectedSet.has(notification._id)}
+                    onChange={() => toggleSelected(notification._id)}
+                    aria-label={`Select notification: ${notification.title}`}
+                  />
+                )}
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? "Read" : "Unread"}</Badge>
@@ -754,20 +823,22 @@ function NotificationDrawer({
                   {notification.emailError && <p className="mt-1 text-xs text-red-700">{notification.emailError}</p>}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>Open context</ActionButton>
-                <ActionButton variant="ghost" onClick={() => void onRead(notification._id, !notification.read)}>
-                  Mark {notification.read ? "unread" : "read"}
-                </ActionButton>
-                <ActionButton
-                  variant="ghost"
-                  onClick={() => {
-                    if (window.confirm("Delete this notification? This cannot be undone.")) void onDelete(notification._id);
-                  }}
-                >
-                  Delete
-                </ActionButton>
-              </div>
+              {!selecting && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>Open context</ActionButton>
+                  <ActionButton variant="ghost" onClick={() => void onRead(notification._id, !notification.read)}>
+                    Mark {notification.read ? "unread" : "read"}
+                  </ActionButton>
+                  <ActionButton
+                    variant="ghost"
+                    onClick={() => {
+                      if (window.confirm("Delete this notification? This cannot be undone.")) void onDelete(notification._id);
+                    }}
+                  >
+                    Delete
+                  </ActionButton>
+                </div>
+              )}
             </article>
           ))}
           {notifications.length === 0 && <div className="p-4"><EmptyState text="No notifications match this filter." /></div>}
