@@ -30,8 +30,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
       return badRequest("You cannot remove, block, or demote the last active manager.", "LAST_MANAGER");
     }
 
+    if (input.managerEmail) {
+      const targetRole = input.role || current.role;
+      if (targetRole !== "account_manager") {
+        return badRequest("Only account managers can be assigned to a manager's team.");
+      }
+      const managerEmail = normalizeEmail(input.managerEmail);
+      if (managerEmail === email) {
+        return badRequest("An account manager cannot be their own manager.");
+      }
+      const manager = await Profile.findOne({ email: managerEmail, role: "super_admin" });
+      if (!manager) return badRequest("Select an existing manager to assign this team member to.");
+    }
+
     if (input.role) current.role = input.role;
     if (input.status) current.status = input.status;
+    if (input.role === "super_admin") current.managerEmail = "";
+    else if (input.managerEmail !== undefined) current.managerEmail = normalizeEmail(input.managerEmail);
     await current.save();
 
     if (accessEnabled === false) {

@@ -132,6 +132,7 @@ type AdminUserRow = {
   lastLoginAt?: string;
   accessEnabled?: boolean;
   source?: string;
+  managerEmail?: string;
 };
 
 type ManagerStat = {
@@ -377,7 +378,7 @@ export function Dashboard() {
   const [requests, setRequests] = useState<TicketRequest[]>([]);
   const [users, setUsers] = useState<{
     allowedUsers: { email: string; role: Role; createdBy?: string; createdAt?: string }[];
-    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string }[];
+    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   }>({ allowedUsers: [], profiles: [], accountRequests: [] });
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -1156,7 +1157,7 @@ function UsersPanel({
 }: {
   users: {
     allowedUsers: { email: string; role: Role; createdBy?: string; createdAt?: string }[];
-    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string }[];
+    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   };
   onDone: () => Promise<void>;
@@ -1190,7 +1191,7 @@ function UsersPanel({
     }
   }
 
-  async function updateUser(email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) {
+  async function updateUser(email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) {
     setBusyEmail(email);
     try {
       await api(`/api/admin/users/${encodeURIComponent(email)}`, {
@@ -1233,6 +1234,7 @@ function UsersPanel({
         lastLoginAt: profile?.lastLoginAt,
         accessEnabled: Boolean(allowed),
         source: allowed ? `Approved${allowed.createdBy ? ` by ${allowed.createdBy}` : ""}` : "Profile only",
+        managerEmail: profile?.managerEmail || "",
       };
     })
     .sort((a, b) => a.email.localeCompare(b.email));
@@ -1268,7 +1270,14 @@ function UsersPanel({
             </div>
           </Field>
         </div>
-        <UserTable title="Users and access" rows={visibleRows} busyEmail={busyEmail} onUpdate={updateUser} onDelete={deleteUser} />
+        <UserTable
+          title="Users and access"
+          rows={visibleRows}
+          managers={combinedRows.filter((row) => row.role === "super_admin")}
+          busyEmail={busyEmail}
+          onUpdate={updateUser}
+          onDelete={deleteUser}
+        />
       </div>
     </div>
   );
@@ -1410,12 +1419,14 @@ function UserTable({
   busyEmail,
   onUpdate,
   onDelete,
+  managers = [],
 }: {
   title: string;
   rows: AdminUserRow[];
   busyEmail: string;
-  onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void>;
+  onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) => Promise<void>;
   onDelete: (email: string) => Promise<void>;
+  managers?: AdminUserRow[];
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
@@ -1423,16 +1434,17 @@ function UserTable({
         <h2 className="font-semibold">{title}</h2>
         <CountPill label="Users" value={rows.length} />
       </div>
-      <div className="hidden grid-cols-[minmax(220px,1.35fr)_190px_170px_170px_220px] gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:grid">
+      <div className="hidden grid-cols-[minmax(200px,1.1fr)_150px_150px_140px_150px_220px] gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:grid">
         <span>User</span>
         <span>Role</span>
+        <span>Team</span>
         <span>Status</span>
         <span>Access</span>
         <span className="text-right">Actions</span>
       </div>
       <div className="divide-y divide-stone-200">
         {rows.map((user) => (
-          <div key={`${title}-${user.email}`} className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,1.35fr)_190px_170px_170px_220px] xl:items-center">
+          <div key={`${title}-${user.email}`} className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(200px,1.1fr)_150px_150px_140px_150px_220px] xl:items-center">
             <div className="min-w-0">
               <span className="block truncate text-sm font-semibold text-stone-950">{user.email}</span>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
@@ -1451,6 +1463,26 @@ function UserTable({
                 <option value="super_admin">Manager</option>
               </select>
             </Field>
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Team</span>
+              {user.role === "account_manager" ? (
+                <select
+                  className={`${inputClass} min-h-10 py-1.5`}
+                  value={user.managerEmail || ""}
+                  disabled={busyEmail === user.email || managers.length === 0}
+                  onChange={(event) => void onUpdate(user.email, { managerEmail: event.target.value })}
+                >
+                  <option value="">Unassigned</option>
+                  {managers.map((manager) => (
+                    <option key={manager.email} value={manager.email}>
+                      {manager.email}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-sm text-stone-400">-</span>
+              )}
+            </div>
             <div className="flex items-center gap-2 xl:block">
               <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Status</span>
               <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>

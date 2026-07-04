@@ -18,6 +18,7 @@ export const adminUserUpdateSchema = z.object({
   status: z.enum(["active", "blocked"]).optional(),
   accessEnabled: z.boolean().optional(),
   whitelisted: z.boolean().optional(),
+  managerEmail: z.union([z.email(), z.literal("")]).optional(),
 });
 
 export const accountRequestSchema = z.object({
