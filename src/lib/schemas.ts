@@ -8,6 +8,11 @@ export const allowedUserSchema = z.object({
   role: roleSchema.default("account_manager"),
 });
 
+export const profileUpdateSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required.").max(60),
+  lastName: z.string().trim().max(60).optional().default(""),
+});
+
 export const adminUserUpdateSchema = z.object({
   role: roleSchema.optional(),
   status: z.enum(["active", "blocked"]).optional(),
