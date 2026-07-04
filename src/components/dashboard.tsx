@@ -2669,6 +2669,136 @@ function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
   );
 }
 
+function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
+  const managers = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        manager: string;
+        requests: number;
+        tickets: number;
+        pending: number;
+        approved: number;
+        rejected: number;
+        dispatches: number;
+        outlets: Map<string, number>;
+        events: Map<string, number>;
+        latest?: string;
+      }
+    >();
+
+    for (const row of rows) {
+      const manager = String(row.accountManager || "Unknown manager").trim() || "Unknown manager";
+      const current =
+        map.get(manager) ??
+        {
+          manager,
+          requests: 0,
+          tickets: 0,
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          dispatches: 0,
+          outlets: new Map<string, number>(),
+          events: new Map<string, number>(),
+          latest: undefined,
+        };
+      const status = String(row.status || "");
+      current.requests += 1;
+      current.tickets += Number(row.quantity || 0);
+      current.dispatches += Number(row.dispatches || 0);
+      if (status === "Pending") current.pending += 1;
+      if (status === "Approved" || status === "Partially approved") current.approved += 1;
+      if (status === "Rejected") current.rejected += 1;
+      const outlet = String(row.outlet || "").trim();
+      const event = String(row.event || "").trim();
+      if (outlet) current.outlets.set(outlet, (current.outlets.get(outlet) ?? 0) + Number(row.quantity || 0));
+      if (event) current.events.set(event, (current.events.get(event) ?? 0) + Number(row.quantity || 0));
+      const createdAt = String(row.createdAt || "");
+      if (createdAt && (!current.latest || new Date(createdAt) > new Date(current.latest))) current.latest = createdAt;
+      map.set(manager, current);
+    }
+
+    return [...map.values()].sort((a, b) => b.tickets - a.tickets || b.requests - a.requests);
+  }, [rows]);
+  const maxTickets = Math.max(...managers.map((manager) => manager.tickets), 1);
+
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Account manager activity matrix</h3>
+          <p className="mt-0.5 text-xs text-stone-500">Who requested what, where they focused, and what still needs manager attention.</p>
+        </div>
+        <CountPill label="Managers" value={managers.length} />
+      </div>
+      {managers.length === 0 ? (
+        <div className="mt-4"><EmptyState text="No account manager activity in the current filters." /></div>
+      ) : (
+        <div className="mt-4 overflow-hidden rounded-md border border-stone-200">
+          <div className="hidden grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px] gap-3 bg-stone-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:grid">
+            <span>Manager</span>
+            <span>Requests</span>
+            <span>Tickets</span>
+            <span>Status mix</span>
+            <span>Top outlet</span>
+            <span>Top event</span>
+            <span>Latest</span>
+          </div>
+          <div className="divide-y divide-stone-200">
+            {managers.map((manager) => {
+              const topOutlet = [...manager.outlets.entries()].sort((a, b) => b[1] - a[1])[0];
+              const topEvent = [...manager.events.entries()].sort((a, b) => b[1] - a[1])[0];
+              const approvalRate = manager.requests ? Math.round((manager.approved / manager.requests) * 100) : 0;
+              return (
+                <div key={manager.manager} className="grid gap-3 px-3 py-3 text-sm xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px] xl:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-stone-950" title={manager.manager}>{manager.manager}</p>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+                      <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${Math.max(6, (manager.tickets / maxTickets) * 100)}%` }} />
+                    </div>
+                  </div>
+                  <MetricCell label="Requests" value={manager.requests} />
+                  <MetricCell label="Tickets" value={manager.tickets} />
+                  <div>
+                    <div className="flex h-2 overflow-hidden rounded-full bg-stone-100">
+                      <span className="bg-emerald-500" style={{ width: `${approvalRate}%` }} />
+                      <span className="bg-amber-400" style={{ width: `${manager.requests ? (manager.pending / manager.requests) * 100 : 0}%` }} />
+                      <span className="bg-red-500" style={{ width: `${manager.requests ? (manager.rejected / manager.requests) * 100 : 0}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">{manager.approved} approved · {manager.pending} pending · {manager.rejected} rejected</p>
+                  </div>
+                  <TextMetric label="Top outlet" value={topOutlet ? `${topOutlet[0]} (${topOutlet[1]})` : "No outlet"} />
+                  <TextMetric label="Top event" value={topEvent ? `${topEvent[0]} (${topEvent[1]})` : "No event"} />
+                  <TextMetric label="Latest" value={manager.latest ? formatShortDate(manager.latest) : "-"} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MetricCell({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:hidden">{label}</span>
+      <p className="font-semibold tabular-nums text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function TextMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:hidden">{label}</span>
+      <p className="truncate text-sm text-stone-700" title={value}>{value}</p>
+    </div>
+  );
+}
+
 function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
   const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
@@ -2716,6 +2846,7 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
         <StatusBreakdownChart rows={rows} />
         <EventPerformanceChart rows={rows} />
       </div>
+      <ManagerActivityMatrix rows={rows} />
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
         <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
