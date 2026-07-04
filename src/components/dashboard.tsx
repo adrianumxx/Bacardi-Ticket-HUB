@@ -1642,31 +1642,31 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
   return (
     <form onSubmit={submit} className="max-w-5xl overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
       <PanelIntro
-        eyebrow="Request flow"
-        title="New sponsorship ticket request"
-        description="Complete the steps in order. The manager can still edit recipients, notes, and final status before sending ticket files."
+        eyebrow="New request"
+        title="Request sponsorship tickets"
+        description="Fill in the details below. A manager will review and respond."
       />
       <div className="space-y-0 px-5 pb-5">
       <Step title="1. Event or festival">
         <div className="grid gap-3">
-          <Field label="Sponsored event or festival">
+          <Field label="Select the event or festival">
             <select name="eventId" className={inputClass} value={effectiveEventId} onChange={(event) => setEventId(event.target.value)} required disabled={published.length === 0}>
               {published.map((event) => <option key={event._id} value={event._id}>{event.name}{event.eventKind === "festival" ? " (Festival)" : ""}</option>)}
             </select>
           </Field>
           {selectedEvent && (
             <div className="space-y-1 rounded-md bg-stone-100 p-3 text-sm text-stone-700">
-              <p>{selectedEvent.name} allows up to <strong>{selectedEvent.maxTicketsPerOutlet}</strong> ticket(s) per outlet.</p>
+              <p>Up to <strong>{selectedEvent.maxTicketsPerOutlet}</strong> ticket{selectedEvent.maxTicketsPerOutlet === 1 ? "" : "s"} per outlet.</p>
             </div>
           )}
         </div>
       </Step>
 
-      <Step title="2. Outlet">
+      <Step title="2. Outlet clients">
         <div className="grid gap-3" aria-label="Outlet clients">
           {outletRows.map((outlet, index) => (
             <div key={outlet.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
-              <Field label={index === 0 ? "Outlet client name" : `Outlet client name ${index + 1}`}>
+              <Field label={index === 0 ? "Client name" : `Client name ${index + 1}`}>
                 <input
                   value={outlet.name}
                   onChange={(event) => updateOutletName(outlet.id, event.target.value)}
@@ -1730,18 +1730,15 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
 
       <Step title="4. Recipients and notes">
         <div className="grid gap-3">
-          <Field label="Suggested recipient emails" hint="The manager can edit these before sending ticket files.">
+          <Field label="Recipient emails" hint="A manager can edit these later.">
             <input name="recipientEmails" type="email" multiple required placeholder="client@outlet.com, manager@agency.com" className={inputClass} />
           </Field>
-          <Field label="Request notes"><textarea name="notes" className={inputClass} rows={4} /></Field>
+          <Field label="Notes"><textarea name="notes" className={inputClass} rows={4} /></Field>
         </div>
       </Step>
 
       <Step title="5. Review">
         <div className="grid gap-3">
-          <p className="text-sm text-stone-600">
-            The manager will review this request, update the final status, and send ticket files by email attachment.
-          </p>
           {blockedReason && <Notice message={blockedReason} tone="bad" />}
           {formError && <Notice message={formError} tone="bad" />}
           {submittedMessage && (
