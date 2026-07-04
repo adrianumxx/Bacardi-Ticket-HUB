@@ -578,6 +578,10 @@ export function Dashboard() {
             await api("/api/notifications/read-all", { method: "POST" });
             await loadNotifications();
           }}
+          onDelete={async (id) => {
+            await api(`/api/notifications/${id}`, { method: "DELETE" });
+            await loadNotifications();
+          }}
         />
       )}
 
@@ -673,6 +677,7 @@ function NotificationDrawer({
   onOpenEntity,
   onRead,
   onReadAll,
+  onDelete,
 }: {
   notifications: AppNotification[];
   unreadCount: number;
@@ -682,6 +687,7 @@ function NotificationDrawer({
   onOpenEntity: (category: AppNotification["category"]) => void;
   onRead: (id: string, read: boolean) => Promise<void>;
   onReadAll: () => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const filters: { id: "all" | "unread" | AppNotification["category"]; label: string }[] = [
     { id: "all", label: "All" },
@@ -740,6 +746,14 @@ function NotificationDrawer({
                 <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>Open context</ActionButton>
                 <ActionButton variant="ghost" onClick={() => void onRead(notification._id, !notification.read)}>
                   Mark {notification.read ? "unread" : "read"}
+                </ActionButton>
+                <ActionButton
+                  variant="ghost"
+                  onClick={() => {
+                    if (window.confirm("Delete this notification? This cannot be undone.")) void onDelete(notification._id);
+                  }}
+                >
+                  Delete
                 </ActionButton>
               </div>
             </article>
