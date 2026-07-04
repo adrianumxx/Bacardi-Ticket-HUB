@@ -191,12 +191,12 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: Tone }) {
   const tones = {
-    neutral: "border-stone-300 bg-white text-stone-700",
-    good: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    warn: "border-amber-200 bg-amber-50 text-amber-800",
-    bad: "border-red-200 bg-red-50 text-red-800",
+    neutral: "border-stone-300/70 bg-white/70 text-stone-700",
+    good: "border-emerald-200/70 bg-emerald-50/70 text-emerald-800",
+    warn: "border-amber-200/70 bg-amber-50/70 text-amber-800",
+    bad: "border-red-200/70 bg-red-50/70 text-red-800",
   };
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tones[tone]}`}>{children}</span>;
+  return <span className={`glass-pill inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -230,14 +230,14 @@ function ActionButton({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" }) {
   const classes = {
-    primary: "border border-[#1a1a18] bg-[#1a1a18] text-white hover:border-[#b8860b] hover:bg-[#b8860b] hover:text-[#1a1a18]",
-    secondary: "border border-stone-300 bg-white text-stone-800 hover:bg-stone-50",
-    ghost: "text-stone-700 hover:bg-stone-100",
+    primary: "glass-button glass-button--dark text-white",
+    secondary: "glass-button glass-button--light text-stone-800",
+    ghost: "glass-button glass-button--gold text-stone-800",
   };
   return (
     <button
       {...props}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${classes[variant]} ${props.className ?? ""}`}
+      className={`glass-button-text inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold disabled:cursor-not-allowed ${classes[variant]} ${props.className ?? ""}`}
     >
       {children}
     </button>
@@ -317,27 +317,29 @@ export function LoginScreen() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b8860b]">Private access</p>
             <h2 className="mt-2 text-3xl font-semibold">{mode === "signin" ? "Sign in with email" : "Request an account"}</h2>
           </div>
-          <div className="mb-5 grid grid-cols-2 border border-[#e8e8e6] p-1">
-            <button
+          <div className="mb-5 grid grid-cols-2 gap-1 p-1">
+            <ActionButton
               type="button"
+              variant={mode === "signin" ? "primary" : "ghost"}
+              className="min-h-10 text-xs uppercase tracking-[0.16em]"
               onClick={() => {
                 setMode("signin");
                 setError("");
               }}
-              className={`min-h-10 text-xs font-semibold uppercase tracking-[0.16em] ${mode === "signin" ? "bg-[#1a1a18] text-white" : "text-stone-600"}`}
             >
               Sign in
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
+              variant={mode === "request" ? "primary" : "ghost"}
+              className="min-h-10 text-xs uppercase tracking-[0.16em]"
               onClick={() => {
                 setMode("request");
                 setError("");
               }}
-              className={`min-h-10 text-xs font-semibold uppercase tracking-[0.16em] ${mode === "request" ? "bg-[#1a1a18] text-white" : "text-stone-600"}`}
             >
               Request access
-            </button>
+            </ActionButton>
           </div>
           {mode === "signin" ? (
             <form className="grid gap-4" onSubmit={submitEmail}>
@@ -512,15 +514,16 @@ export function Dashboard() {
       <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#fafaf8]/95 backdrop-blur">
         <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <button
+            <ActionButton
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white lg:hidden"
+              variant="secondary"
+              className="h-10 w-10 min-h-0 px-0 lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
               aria-expanded={mobileNavOpen}
             >
               <Menu size={19} />
-            </button>
+            </ActionButton>
             <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={44} height={44} className="h-11 w-11 shrink-0 object-contain" priority unoptimized />
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">Bacardi Ticket Hub</p>
@@ -528,23 +531,26 @@ export function Dashboard() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button
+            <ActionButton
               type="button"
-              className="hidden h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white lg:inline-flex"
+              variant="secondary"
+              className="hidden h-10 w-10 min-h-0 px-0 lg:inline-flex"
               onClick={() => setSidebarCollapsed((current) => !current)}
               title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             >
               {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-            </button>
-            <div className="hidden items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 sm:flex">
+            </ActionButton>
+            <div className="glass-pill hidden items-center gap-2 rounded-full border border-stone-200/70 bg-white/70 px-3 py-2 sm:flex">
               <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
-            <button className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white" onClick={() => void refresh()} title="Refresh">
+            <ActionButton type="button" variant="secondary" className="h-10 w-10 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
               <RefreshCcw size={18} className={loading ? "animate-spin" : ""} />
-            </button>
-            <button
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white"
+            </ActionButton>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              className="relative h-10 w-10 min-h-0 px-0"
               onClick={() => setNotificationsOpen(true)}
               title="Notifications"
             >
@@ -554,10 +560,10 @@ export function Dashboard() {
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
-            </button>
-            <button className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-stone-300 bg-white" onClick={() => signOut()} title="Sign out">
+            </ActionButton>
+            <ActionButton type="button" variant="secondary" className="h-10 w-10 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
               <LogOut size={18} />
-            </button>
+            </ActionButton>
           </div>
         </div>
       </header>
@@ -601,31 +607,30 @@ export function Dashboard() {
                   <p className="truncate text-sm font-semibold">Ticket Hub</p>
                 </div>
               </div>
-              <button type="button" className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-300 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
+              <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
                 <X size={18} />
-              </button>
+              </ActionButton>
             </div>
 
             <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
               {tabs.map(([id, label, Icon]) => (
-                <button
+                <ActionButton
                   key={id as string}
                   type="button"
+                  variant={currentTab === id ? "primary" : "ghost"}
                   onClick={() => openTab(id as string)}
                   title={label as string}
                   aria-current={currentTab === id ? "page" : undefined}
-                  className={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
-                    currentTab === id ? "bg-[#1a1a18] text-white shadow-sm" : "text-stone-700 hover:bg-stone-100"
-                  } ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                  className={`w-full justify-start gap-3 px-3 ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
                 >
                   <Icon size={18} className="shrink-0" />
                   <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>{label as string}</span>
-                </button>
+                </ActionButton>
               ))}
             </nav>
 
             <div className="border-t border-stone-200 p-3">
-              <div className={`rounded-md bg-stone-50 p-3 ${sidebarCollapsed ? "lg:px-2" : ""}`}>
+              <div className={`glass-pill rounded-md bg-stone-50/70 p-3 ${sidebarCollapsed ? "lg:px-2" : ""}`}>
                 <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
                 <p className={`mt-2 truncate text-xs text-stone-500 ${sidebarCollapsed ? "lg:hidden" : ""}`}>{session?.user?.email}</p>
               </div>
@@ -708,23 +713,25 @@ function NotificationDrawer({
             <h2 className="mt-1 text-xl font-semibold">Inbox</h2>
             <p className="mt-1 text-sm text-stone-600">{unreadCount} unread notification(s)</p>
           </div>
-          <button className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-300" onClick={onClose} aria-label="Close">
+          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close">
             <X size={18} />
-          </button>
+          </ActionButton>
         </div>
         <div className="flex flex-wrap gap-2 border-b border-stone-200 p-3">
           {filters.map((item) => (
-            <button
+            <ActionButton
               key={item.id}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === item.id ? "border-[#1a1a18] bg-[#1a1a18] text-white" : "border-stone-200 bg-white text-stone-700"}`}
+              type="button"
+              variant={filter === item.id ? "primary" : "secondary"}
+              className="min-h-9 px-3 text-xs"
               onClick={() => onFilter(item.id)}
             >
               {item.label}
-            </button>
+            </ActionButton>
           ))}
-          <button className="ml-auto rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700" onClick={() => void onReadAll()}>
+          <ActionButton type="button" variant="secondary" className="ml-auto min-h-9 px-3 text-xs" onClick={() => void onReadAll()}>
             Mark all read
-          </button>
+          </ActionButton>
         </div>
         <div className="flex-1 overflow-y-auto">
           {notifications.map((notification) => (
