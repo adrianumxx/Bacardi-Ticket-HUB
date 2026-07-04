@@ -36,21 +36,36 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const event = await Event.findById(id).lean<{ _id: unknown; name: string } | null>();
     if (!event) return badRequest("Event or festival not found.");
 
-    // Deleting an event that already has ticket requests would leave those
-    // requests with a dangling reference and silently corrupt report/history
-    // data. Require the requests to be dealt with (or the event kept closed)
-    // instead of allowing an unsafe delete.
+    // A manager can always delete an event, even if ticket requests still
+    // reference it. Those requests aren't deleted or hidden -- they keep
+    // their history and dispatch records, and every place that reads
+    // request.event already tolerates it being missing after this. Record
+    // the deletion on each affected request so the gap is traceable instead
+    // of silent.
     const linkedRequests = await TicketRequest.countDocuments({ event: id });
     if (linkedRequests > 0) {
-      return badRequest(
-        `Cannot delete "${event.name}": ${linkedRequests} ticket request(s) reference it. Keep it closed instead, or delete those requests first.`,
-        "EVENT_HAS_REQUESTS",
+      await TicketRequest.updateMany(
+        { event: id },
+        {
+          $push: {
+            history: {
+              by: user.email,
+              action: "event_deleted",
+              message: `The sponsored event "${event.name}" was deleted by the manager.`,
+            },
+          },
+        },
       );
     }
 
     await Event.deleteOne({ _id: id });
-    await auditLog({ actor: user.email, action: "event.deleted", target: id, payload: { name: event.name } });
-    return json({ ok: true });
+    await auditLog({
+      actor: user.email,
+      action: "event.deleted",
+      target: id,
+      payload: { name: event.name, affectedRequests: linkedRequests },
+    });
+    return json({ ok: true, affectedRequests: linkedRequests });
   } catch (error) {
     return errorResponse(error);
   }
