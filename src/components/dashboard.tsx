@@ -484,6 +484,7 @@ export function Dashboard() {
   const currentTab = (tabs.some(([id]) => id === tab) ? tab : tabs[0]?.[0] ?? "requests") as string;
   const activeTab = tabs.find(([id]) => id === currentTab);
   const activeLabel = (activeTab?.[1] as string | undefined) ?? "Dashboard";
+  const showWorkspaceKpis = currentTab === (tabs[0]?.[0] as string | undefined) || currentTab === "reports";
 
   function openTab(id: string) {
     setTab(id);
@@ -652,13 +653,15 @@ export function Dashboard() {
                 : "Create ticket requests and track approvals from one place."}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-            <Kpi label="Total Requests" value={kpis.total} icon={Ticket} tone="gold" />
-            <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
-            <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
-            <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
-            <Kpi label="Ticket Emails Sent" value={kpis.sent} icon={Send} tone="neutral" />
-          </div>
+          {showWorkspaceKpis && (
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+              <Kpi label="Total Requests" value={kpis.total} icon={Ticket} tone="gold" />
+              <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
+              <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
+              <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
+              <Kpi label="Ticket Emails Sent" value={kpis.sent} icon={Send} tone="neutral" />
+            </div>
+          )}
 
           {currentTab === "requests" && <AdminRequests requests={requests} events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "events" && <EventsPanel events={events} onDone={refresh} notify={showNotice} />}
@@ -2327,9 +2330,7 @@ function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => v
 
 type ReportRow = Record<string, string | number>;
 
-// Single-hue gold ramp, validated for a sequential/ordinal magnitude encoding
-// (light->dark, monotonic lightness, clears contrast at the light end).
-const magnitudeRamp = ["#ECDFC8", "#c19323", "#a97815", "#7A4A1C", "#5f4506"];
+const magnitudeRamp = ["#14b8a6", "#f59e0b", "#ef4444", "#6366f1", "#7A4A1C"];
 
 const statusChartColors: Record<string, string> = {
   Pending: "#a8a29e",
@@ -2367,11 +2368,113 @@ function RankedBarChart({ title, subtitle, data, emptyText }: { title: string; s
                 <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
                   <div
                     className="h-full rounded-full transition-all"
-                    style={{ width: `${Math.max(4, (value / max) * 100)}%`, background: magnitudeRamp[0] }}
+                    style={{ width: `${Math.max(4, (value / max) * 100)}%`, background: `linear-gradient(90deg, ${magnitudeRamp[0]}, ${magnitudeRamp[1]})` }}
                   />
                 </div>
               </div>
               <span className="text-sm font-semibold tabular-nums text-stone-800">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InsightMetric({ label, value, detail, tone = "neutral" }: { label: string; value: string | number; detail: string; tone?: Tone }) {
+  const tones = {
+    neutral: "border-stone-200 bg-white text-stone-950",
+    good: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    warn: "border-amber-200 bg-amber-50 text-amber-950",
+    bad: "border-red-200 bg-red-50 text-red-950",
+  };
+  return (
+    <div className={`rounded-md border p-4 shadow-sm ${tones[tone]}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 text-xs leading-5 text-stone-600">{detail}</p>
+    </div>
+  );
+}
+
+function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
+  const totals = rows.reduce<{ requests: number; dispatched: number; emails: number }>(
+    (acc, row) => {
+      acc.requests += 1;
+      acc.dispatched += Number(row.dispatches || 0) > 0 ? 1 : 0;
+      acc.emails += Number(row.dispatches || 0);
+      return acc;
+    },
+    { requests: 0, dispatched: 0, emails: 0 },
+  );
+  const coverage = totals.requests ? Math.round((totals.dispatched / totals.requests) * 100) : 0;
+  const circumference = 2 * Math.PI * 42;
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold">Dispatch coverage</h3>
+      <p className="mt-0.5 text-xs text-stone-500">How many approved workflows already produced ticket emails.</p>
+      {totals.requests === 0 ? (
+        <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
+      ) : (
+        <div className="mt-5 grid gap-4 sm:grid-cols-[130px_1fr] sm:items-center">
+          <div className="relative h-32 w-32">
+            <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#f5f5f4" strokeWidth="10" />
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="#14b8a6"
+                strokeLinecap="round"
+                strokeWidth="10"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference - (coverage / 100) * circumference}
+              />
+            </svg>
+            <div className="absolute inset-0 grid place-items-center text-center">
+              <span className="text-2xl font-semibold tabular-nums">{coverage}%</span>
+            </div>
+          </div>
+          <div className="grid gap-2 text-sm">
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Requests with email dispatch</span><strong>{totals.dispatched}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Total request rows</span><strong>{totals.requests}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Ticket emails sent</span><strong>{totals.emails}</strong></div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EventPerformanceChart({ rows }: { rows: ReportRow[] }) {
+  const data = rankedTotals(rows, "event", "quantity", 6);
+  const max = Math.max(...data.map(([, value]) => value), 1);
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <h3 className="text-sm font-semibold">Event demand map</h3>
+      <p className="mt-0.5 text-xs text-stone-500">Highest ticket pressure by sponsored event or festival.</p>
+      {data.length === 0 ? (
+        <div className="mt-4"><EmptyState text="No event demand in the current filters." /></div>
+      ) : (
+        <div className="mt-4 grid gap-3">
+          {data.map(([label, value], index) => (
+            <div key={label} className="grid gap-1">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate font-medium text-stone-700" title={label}>{label}</span>
+                <span className="font-semibold tabular-nums text-stone-950">{value}</span>
+              </div>
+              <div className="h-7 overflow-hidden rounded-md bg-stone-100">
+                <div
+                  className="flex h-full items-center justify-end rounded-md px-2 text-[10px] font-semibold text-white"
+                  style={{
+                    width: `${Math.max(12, (value / max) * 100)}%`,
+                    background: `linear-gradient(90deg, ${magnitudeRamp[index % magnitudeRamp.length]}, #181412)`,
+                  }}
+                >
+                  {Math.round((value / max) * 100)}%
+                </div>
+              </div>
             </div>
           ))}
         </div>
@@ -2393,6 +2496,14 @@ function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
     return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-30);
   }, [rows]);
   const max = Math.max(...byDay.map(([, value]) => value), 1);
+  const points = byDay
+    .map(([, value], index) => {
+      const x = byDay.length === 1 ? 50 : (index / (byDay.length - 1)) * 100;
+      const y = 92 - (value / max) * 78;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const areaPoints = points ? `0,96 ${points} 100,96` : "";
 
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
@@ -2408,7 +2519,17 @@ function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
               <p className="text-stone-500">{formatShortDate(byDay[hoverIndex][0])}</p>
             </div>
           )}
-          <div className="flex h-32 items-end gap-1">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-36 w-full overflow-visible rounded-md bg-stone-50">
+            <defs>
+              <linearGradient id="ticketTrendFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <polyline points={areaPoints} fill="url(#ticketTrendFill)" stroke="none" />
+            <polyline points={points} fill="none" stroke="#14b8a6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+          </svg>
+          <div className="mt-2 flex h-10 items-end gap-1">
             {byDay.map(([day, value], index) => (
               <div
                 key={day}
@@ -2418,7 +2539,7 @@ function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
               >
                 <div
                   className="mx-auto w-full rounded-t transition-all group-hover:opacity-80"
-                  style={{ height: `${Math.max(3, (value / max) * 100)}%`, background: magnitudeRamp[0] }}
+                  style={{ height: `${Math.max(8, (value / max) * 100)}%`, background: "#f59e0b" }}
                 />
               </div>
             ))}
@@ -2478,18 +2599,28 @@ function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
 }
 
 function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
+  const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+  const totalDispatches = rows.reduce((sum, row) => sum + Number(row.dispatches || 0), 0);
   const uniqueManagers = new Set(rows.map((row) => String(row.accountManager || ""))).size;
   const uniqueOutlets = new Set(rows.map((row) => String(row.outlet || ""))).size;
+  const approved = rows.filter((row) => ["Approved", "Partially approved"].includes(String(row.status))).length;
+  const pending = rows.filter((row) => String(row.status) === "Pending").length;
+  const approvalRate = totalRequests ? Math.round((approved / totalRequests) * 100) : 0;
+  const avgTickets = totalRequests ? (totalTickets / totalRequests).toFixed(1) : "0.0";
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
-        <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
-        <Kpi label="Outlets Involved" value={uniqueOutlets} icon={Store} tone="neutral" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InsightMetric label="Approval rate" value={`${approvalRate}%`} detail={`${approved} approved or partially approved of ${totalRequests} request(s).`} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
+        <InsightMetric label="Average tickets" value={avgTickets} detail="Requested tickets per request in the current filter." />
+        <InsightMetric label="Pending queue" value={pending} detail="Requests still waiting for a manager decision." tone={pending > 0 ? "warn" : "good"} />
+        <InsightMetric label="Ticket emails" value={totalDispatches} detail="Dispatch records created after ticket files were sent." />
       </div>
-      <TicketsOverTimeChart rows={rows} />
+      <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
+        <TicketsOverTimeChart rows={rows} />
+        <DispatchCoverageChart rows={rows} />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <RankedBarChart
           title="Tickets by account manager"
@@ -2510,7 +2641,15 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
           emptyText="No ticket emails have been sent in the current filters."
         />
       </div>
-      <StatusBreakdownChart rows={rows} />
+      <div className="grid gap-4 xl:grid-cols-[1fr_1.35fr]">
+        <StatusBreakdownChart rows={rows} />
+        <EventPerformanceChart rows={rows} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
+        <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
+        <Kpi label="Outlets Involved" value={uniqueOutlets} icon={Store} tone="neutral" />
+      </div>
     </div>
   );
 }
