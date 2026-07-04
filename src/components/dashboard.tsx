@@ -595,7 +595,7 @@ export function Dashboard() {
         />
       )}
 
-      <div className="mx-auto flex max-w-[1600px]">
+      <div className="flex">
         <aside
           className={`fixed inset-y-0 left-0 z-50 shrink-0 transform transition-all duration-200 lg:sticky lg:top-16 lg:z-30 lg:h-[calc(100vh-4rem)] lg:translate-x-0 ${
             mobileNavOpen ? "translate-x-0" : "-translate-x-full"
@@ -646,7 +646,7 @@ export function Dashboard() {
             <Notice message={notice.message} tone={notice.tone} />
           </div>
         )}
-        <section className="min-w-0 flex-1 space-y-5 px-4 py-4 sm:px-6 lg:px-8">
+        <section className="mx-auto min-w-0 w-full max-w-[1600px] flex-1 space-y-5 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Workspace</p>
