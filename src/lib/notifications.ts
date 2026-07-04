@@ -18,6 +18,7 @@ type NotifyInput = {
     subject?: string;
     html?: string;
     attachments?: { filename: string; content: string }[];
+    replyTo?: string;
   };
 };
 
@@ -46,6 +47,7 @@ export async function notifyUser(input: NotifyInput): Promise<NotifyResult> {
         subject: input.email.subject || input.title,
         html: input.email.html || emailHtml(input.title, input.message),
         attachments: input.email.attachments,
+        replyTo: input.email.replyTo,
       })
     : ({ status: "skipped", providerId: "", error: "" } as MailDelivery);
 

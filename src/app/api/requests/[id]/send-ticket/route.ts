@@ -84,6 +84,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           metadata: { fileNames: files.map((file) => file.name) },
           email: {
             subject: parsed.subject,
+            replyTo: user.email,
             html: emailHtml("Bacardi tickets", parsed.message),
             attachments,
           },

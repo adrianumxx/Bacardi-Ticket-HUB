@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       message: `A manager enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`,
       email: {
         subject: "Your Bacardi Ticket Hub access is enabled",
+        replyTo: user.email,
         html: emailHtml("Access enabled", `A manager enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`),
       },
     });

@@ -90,6 +90,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         priority: nextStatus === "rejected" ? "high" : "normal",
         email: {
           subject,
+          replyTo: user.email,
           html: emailHtml(
             "Request status updated",
             `The request is now: ${renderRequestStatus(nextStatus)}.\n${input.adminNotes || ""}`,

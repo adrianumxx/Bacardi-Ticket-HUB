@@ -49,6 +49,7 @@ export async function POST(request: Request) {
       priority: "high",
       email: {
         subject,
+        replyTo: email,
         html: emailHtml(
           "New access request",
           `${input.name} requested access with ${email}.\nCompany/team: ${input.company || "Not provided"}\nReason: ${

@@ -10,6 +10,7 @@ type SendMailInput = {
   subject: string;
   html: string;
   attachments?: Attachment[];
+  replyTo?: string;
 };
 
 export type MailDelivery = {
@@ -33,6 +34,7 @@ export async function sendMail(input: SendMailInput) {
   const result = await resend.emails.send({
     from: process.env.MAIL_FROM || "Bacardi Ticket Hub <tickets@example.com>",
     to: input.to,
+    replyTo: input.replyTo,
     subject: input.subject,
     html: input.html,
     attachments: input.attachments,

@@ -51,6 +51,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       priority: "high",
       email: {
         subject,
+        replyTo: user.email,
         html: emailHtml(
           input.status === "approved" ? "Access approved" : "Access request reviewed",
           input.status === "approved"

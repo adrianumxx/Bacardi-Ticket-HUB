@@ -167,6 +167,7 @@ export async function POST(request: Request) {
         priority: "high",
         email: {
           subject: adminSubject,
+          replyTo: user.email,
           html: emailHtml(
             "New sponsorship ticket request",
             `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
@@ -191,6 +192,7 @@ export async function POST(request: Request) {
         message: `Your request for ${outlet.name} has been registered and is pending manager review.`,
         email: {
           subject: requesterSubject,
+          replyTo: user.email,
           html: emailHtml(
             "Request received",
             `Your request for ${outlet.name} has been registered and is pending manager review.`,
