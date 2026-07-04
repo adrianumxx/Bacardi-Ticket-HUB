@@ -1380,28 +1380,38 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
   );
 }
 
-function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventItem[]; outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const published = events.filter((event) => event.status === "published");
-  const approvedOutlets = outlets.filter((outlet) => outlet.status === "approved");
   const [eventId, setEventId] = useState("");
-  const [useNewOutlet, setUseNewOutlet] = useState(false);
-  const [outletSearch, setOutletSearch] = useState("");
+  const outletIdCounter = useRef(1);
+  const [outletNames, setOutletNames] = useState([{ id: "outlet-1", name: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const effectiveEventId = eventId || published[0]?._id || "";
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
-  const filteredOutlets = approvedOutlets.filter((outlet) =>
-    outlet.name.toLowerCase().includes(outletSearch.toLowerCase()),
-  );
+  const validOutletNames = outletNames.map((outlet) => outlet.name.trim()).filter(Boolean);
   const blockedReason =
     published.length === 0
       ? "No published events or festivals are available."
-      : !useNewOutlet && filteredOutlets.length === 0
-        ? "No approved outlets match the current search."
+      : validOutletNames.length === 0
+        ? "Add at least one outlet client name."
         : ticketTypes.length === 0
           ? "The selected event or festival has no active ticket types."
           : "";
+
+  function addOutletName() {
+    outletIdCounter.current += 1;
+    setOutletNames((current) => [...current, { id: `outlet-${outletIdCounter.current}`, name: "" }]);
+  }
+
+  function updateOutletName(id: string, name: string) {
+    setOutletNames((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, name } : outlet)));
+  }
+
+  function removeOutletName(id: string) {
+    setOutletNames((current) => (current.length === 1 ? current : current.filter((outlet) => outlet.id !== id)));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1415,17 +1425,16 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
         method: "POST",
         body: JSON.stringify({
           eventId: form.get("eventId"),
-          outletId: useNewOutlet ? undefined : form.get("outletId"),
-          newOutlet: useNewOutlet ? { name: form.get("newOutletName") } : undefined,
+          outlets: validOutletNames.map((name) => ({ name })),
           recipientEmails: form.get("recipientEmails"),
           items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
           notes: form.get("notes"),
         }),
       });
       formElement.reset();
-      setOutletSearch("");
-      setUseNewOutlet(false);
-      notify("Request submitted for manager review.");
+      outletIdCounter.current = 1;
+      setOutletNames([{ id: "outlet-1", name: "" }]);
+      notify(validOutletNames.length > 1 ? `${validOutletNames.length} requests submitted for manager review.` : "Request submitted for manager review.");
       await onDone();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit the request.";
@@ -1460,28 +1469,47 @@ function NewRequestPanel({ events, outlets, onDone, notify }: { events: EventIte
       </Step>
 
       <Step title="2. Outlet">
-        <div className="grid gap-3">
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" checked={useNewOutlet} onChange={(event) => setUseNewOutlet(event.target.checked)} />
-            Propose a new outlet
-          </label>
-          {useNewOutlet ? (
-            <Field label="Outlet name"><input name="newOutletName" autoFocus placeholder="e.g. The Rooftop Bar" className={inputClass} required={useNewOutlet} /></Field>
-          ) : (
-            <div className="grid gap-3">
-              <Field label="Search outlet">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 text-stone-400" size={16} />
-                  <input value={outletSearch} onChange={(event) => setOutletSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search by name" />
-                </div>
+        <div className="grid gap-3" aria-label="Outlet clients">
+          {outletNames.map((outlet, index) => (
+            <div key={outlet.id} className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+              <Field label={index === 0 ? "Outlet client name" : `Outlet client name ${index + 1}`}>
+                <input
+                  value={outlet.name}
+                  onChange={(event) => updateOutletName(outlet.id, event.target.value)}
+                  autoFocus={index === 0}
+                  placeholder="e.g. The Rooftop Bar"
+                  className={inputClass}
+                  required={index === 0}
+                />
               </Field>
-              <Field label="Outlet">
-                <select name="outletId" className={inputClass} required={!useNewOutlet} disabled={filteredOutlets.length === 0}>
-                  {filteredOutlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name}</option>)}
-                </select>
-              </Field>
+              <div className="flex gap-2">
+                {outletNames.length > 1 && (
+                  <ActionButton
+                    type="button"
+                    variant="secondary"
+                    aria-label={`Remove outlet client ${index + 1}`}
+                    title="Remove outlet"
+                    className="aspect-square min-h-11 w-11 px-0"
+                    onClick={() => removeOutletName(outlet.id)}
+                  >
+                    <X size={17} />
+                  </ActionButton>
+                )}
+                {index === outletNames.length - 1 && (
+                  <ActionButton
+                    type="button"
+                    variant="ghost"
+                    aria-label="Add another outlet client"
+                    title="Add outlet"
+                    className="aspect-square min-h-11 w-11 px-0"
+                    onClick={addOutletName}
+                  >
+                    <Plus size={18} />
+                  </ActionButton>
+                )}
+              </div>
             </div>
-          )}
+          ))}
         </div>
       </Step>
 

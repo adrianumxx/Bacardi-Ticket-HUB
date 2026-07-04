@@ -16,6 +16,12 @@ type LeanEvent = {
   ticketTypes: { name: string; active: boolean }[];
 };
 
+type LeanOutlet = { _id: unknown; name: string; status: string };
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requireUser();
@@ -64,109 +70,138 @@ export async function POST(request: Request) {
     const ticketTypeError = validateTicketTypes(event, input.items);
     if (ticketTypeError) return badRequest(ticketTypeError);
 
-    let outletId = input.outletId;
-    if (!outletId && input.newOutlet) {
-      const outlet = await Outlet.create({
-        ...input.newOutlet,
-        status: "pending",
-        proposedBy: user.email,
+    const outletInputs =
+      input.outlets?.length
+        ? input.outlets
+        : input.newOutlet
+          ? [{ name: input.newOutlet.name }]
+          : [];
+    const createdRequests: Array<{ _id: unknown }> = [];
+    async function rollbackAndBadRequest(message: string) {
+      if (createdRequests.length > 0) {
+        await TicketRequest.deleteMany({ _id: { $in: createdRequests.map((requestDoc) => requestDoc._id) } });
+      }
+      return badRequest(message);
+    }
+
+    if (!input.outletId && outletInputs.length === 0) return badRequest("Add at least one outlet.");
+
+    for (const outletInput of outletInputs.length > 0 ? outletInputs : [{ name: "" }]) {
+      let outletId = input.outletId;
+      let outlet: LeanOutlet | null = null;
+
+      if (outletInput.name) {
+        outlet = (await Outlet.findOne({
+          name: { $regex: `^${escapeRegExp(outletInput.name.trim())}$`, $options: "i" },
+          status: { $ne: "archived" },
+        }).lean()) as LeanOutlet | null;
+
+        if (!outlet) {
+          outlet = (await Outlet.create({
+            name: outletInput.name.trim(),
+            status: "pending",
+            proposedBy: user.email,
+          })) as LeanOutlet;
+        }
+        outletId = String(outlet._id);
+      }
+
+      if (!outletId) return rollbackAndBadRequest("Add at least one outlet.");
+
+      outlet = outlet ?? ((await Outlet.findById(outletId).lean()) as LeanOutlet | null);
+      if (!outlet || outlet.status === "archived") return rollbackAndBadRequest("The selected outlet is not valid.");
+
+      const existingQty = await usedTicketsForOutlet(input.eventId, outletId);
+      if (existingQty + requestedQty > event.maxTicketsPerOutlet) {
+        return rollbackAndBadRequest(
+          `Outlet limit exceeded for ${outlet.name}: ${existingQty} ticket(s) already requested, maximum ${event.maxTicketsPerOutlet}.`,
+        );
+      }
+
+      const ticketRequest = await TicketRequest.create({
+        event: event._id,
+        outlet: outlet._id,
+        requestedBy: user.email,
+        accountManagerName: user.name,
+        recipientEmails: input.recipientEmails,
+        items: input.items,
+        notes: input.notes,
+        history: [
+          {
+            by: user.email,
+            action: "created",
+            message: "Ticket request created.",
+          },
+        ],
       });
-      outletId = String(outlet._id);
-    }
-    if (!outletId) return badRequest("Select an outlet or propose a new one.");
 
-    const outlet = (await Outlet.findById(outletId).lean()) as { _id: unknown; name: string; status: string } | null;
-    if (!outlet || outlet.status === "archived") return badRequest("The selected outlet is not valid.");
+      // Compensating check: the read-then-write above has a race window under
+      // concurrent requests for the same outlet. Re-verify right after insert
+      // and roll back this request if the limit was exceeded in the meantime,
+      // instead of relying on Mongo transactions (which require a replica set
+      // we can't assume every deployment has).
+      const confirmedQty = await usedTicketsForOutlet(input.eventId, outletId);
+      if (confirmedQty > event.maxTicketsPerOutlet) {
+        await TicketRequest.deleteOne({ _id: ticketRequest._id });
+        return rollbackAndBadRequest(
+          `Outlet limit exceeded for ${outlet.name}: another request was submitted at the same time. Maximum ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
+        );
+      }
 
-    const existingQty = await usedTicketsForOutlet(input.eventId, outletId);
-    if (existingQty + requestedQty > event.maxTicketsPerOutlet) {
-      return badRequest(
-        `Outlet limit exceeded: ${existingQty} ticket(s) already requested, maximum ${event.maxTicketsPerOutlet}.`,
-      );
-    }
-
-    const ticketRequest = await TicketRequest.create({
-      event: event._id,
-      outlet: outlet._id,
-      requestedBy: user.email,
-      accountManagerName: user.name,
-      recipientEmails: input.recipientEmails,
-      items: input.items,
-      notes: input.notes,
-      history: [
-        {
-          by: user.email,
-          action: "created",
-          message: "Ticket request created.",
+      const adminRecipients = adminNotifyEmails();
+      const adminSubject = `New sponsorship ticket request: ${event.name}`;
+      const [adminNotification] = await notifyAdmins({
+        actor: user.email,
+        category: "requests",
+        entityType: "ticket_request",
+        entityId: String(ticketRequest._id),
+        title: "New sponsorship ticket request",
+        message: `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
+        priority: "high",
+        email: {
+          subject: adminSubject,
+          html: emailHtml(
+            "New sponsorship ticket request",
+            `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
+          ),
         },
-      ],
-    });
+      });
+      const adminDelivery = adminNotification.delivery;
+      ticketRequest.history.push({
+        by: "system",
+        action: adminDelivery.status === "failed" ? "notification_failed" : adminDelivery.status === "skipped" ? "notification_skipped" : "notification_sent",
+        message: `Manager alert ${adminDelivery.status} for ${adminRecipients.join(", ") || "no configured recipients"}.${adminDelivery.error ? ` ${adminDelivery.error}` : ""}`,
+      });
 
-    // Compensating check: the read-then-write above has a race window under
-    // concurrent requests for the same outlet. Re-verify right after insert
-    // and roll back this request if the limit was exceeded in the meantime,
-    // instead of relying on Mongo transactions (which require a replica set
-    // we can't assume every deployment has).
-    const confirmedQty = await usedTicketsForOutlet(input.eventId, outletId);
-    if (confirmedQty > event.maxTicketsPerOutlet) {
-      await TicketRequest.deleteOne({ _id: ticketRequest._id });
-      return badRequest(
-        `Outlet limit exceeded: another request was submitted at the same time. Maximum ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
-      );
+      const requesterSubject = `Request received: ${event.name}`;
+      const requesterNotification = await notifyUser({
+        recipient: user.email,
+        actor: user.email,
+        category: "requests",
+        entityType: "ticket_request",
+        entityId: String(ticketRequest._id),
+        title: "Request received",
+        message: `Your request for ${outlet.name} has been registered and is pending manager review.`,
+        email: {
+          subject: requesterSubject,
+          html: emailHtml(
+            "Request received",
+            `Your request for ${outlet.name} has been registered and is pending manager review.`,
+          ),
+        },
+      });
+      const requesterDelivery = requesterNotification.delivery;
+      ticketRequest.history.push({
+        by: "system",
+        action: requesterDelivery.status === "failed" ? "notification_failed" : requesterDelivery.status === "skipped" ? "notification_skipped" : "notification_sent",
+        message: `Requester confirmation ${requesterDelivery.status} for ${user.email}.${requesterDelivery.error ? ` ${requesterDelivery.error}` : ""}`,
+      });
+      await ticketRequest.save();
+      await auditLog({ actor: user.email, action: "ticket_request.created", target: String(ticketRequest._id), payload: { eventId: input.eventId, outletId } });
+      createdRequests.push(ticketRequest);
     }
 
-    const adminRecipients = adminNotifyEmails();
-    const adminSubject = `New sponsorship ticket request: ${event.name}`;
-    const [adminNotification] = await notifyAdmins({
-      actor: user.email,
-      category: "requests",
-      entityType: "ticket_request",
-      entityId: String(ticketRequest._id),
-      title: "New sponsorship ticket request",
-      message: `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
-      priority: "high",
-      email: {
-        subject: adminSubject,
-        html: emailHtml(
-          "New sponsorship ticket request",
-          `${user.name} requested ${requestedQty} ticket(s) for ${outlet.name}.\nEvent/Festival: ${event.name}`,
-        ),
-      },
-    });
-    const adminDelivery = adminNotification.delivery;
-    ticketRequest.history.push({
-      by: "system",
-      action: adminDelivery.status === "failed" ? "notification_failed" : adminDelivery.status === "skipped" ? "notification_skipped" : "notification_sent",
-      message: `Manager alert ${adminDelivery.status} for ${adminRecipients.join(", ") || "no configured recipients"}.${adminDelivery.error ? ` ${adminDelivery.error}` : ""}`,
-    });
-
-    const requesterSubject = `Request received: ${event.name}`;
-    const requesterNotification = await notifyUser({
-      recipient: user.email,
-      actor: user.email,
-      category: "requests",
-      entityType: "ticket_request",
-      entityId: String(ticketRequest._id),
-      title: "Request received",
-      message: `Your request for ${outlet.name} has been registered and is pending manager review.`,
-      email: {
-        subject: requesterSubject,
-        html: emailHtml(
-          "Request received",
-          `Your request for ${outlet.name} has been registered and is pending manager review.`,
-        ),
-      },
-    });
-    const requesterDelivery = requesterNotification.delivery;
-    ticketRequest.history.push({
-      by: "system",
-      action: requesterDelivery.status === "failed" ? "notification_failed" : requesterDelivery.status === "skipped" ? "notification_skipped" : "notification_sent",
-      message: `Requester confirmation ${requesterDelivery.status} for ${user.email}.${requesterDelivery.error ? ` ${requesterDelivery.error}` : ""}`,
-    });
-    await ticketRequest.save();
-    await auditLog({ actor: user.email, action: "ticket_request.created", target: String(ticketRequest._id), payload: { eventId: input.eventId, outletId } });
-
-    return json({ request: ticketRequest }, { status: 201 });
+    return json({ request: createdRequests[0], requests: createdRequests }, { status: 201 });
   } catch (error) {
     return errorResponse(error);
   }
