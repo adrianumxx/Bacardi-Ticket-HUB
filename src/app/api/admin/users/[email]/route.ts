@@ -64,3 +64,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     return errorResponse(error);
   }
 }
+
+export async function DELETE(request: Request, context: { params: Promise<{ email: string }> }) {
+  try {
+    const actor = await requireSuperAdmin();
+    await connectDb();
+    const { email: rawEmail } = await context.params;
+    const email = normalizeEmail(decodeURIComponent(rawEmail));
+
+    if (email === actor.email) {
+      return badRequest("You cannot delete your own account.");
+    }
+
+    const current = await Profile.findOne({ email });
+    if (current?.role === "super_admin" && (await isLastSuperAdmin(email))) {
+      return badRequest("You cannot remove the last active manager.", "LAST_MANAGER");
+    }
+
+    await Promise.all([Profile.deleteOne({ email }), AllowedUser.deleteOne({ email })]);
+    await auditLog({ actor: actor.email, action: "user.deleted", target: email });
+
+    return json({ ok: true });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
