@@ -12,6 +12,7 @@ const ProfileSchema = new Schema(
     role: { type: String, enum: roles, required: true, default: "account_manager" },
     status: { type: String, enum: ["active", "blocked"], default: "active" },
     lastLoginAt: { type: Date },
+    managerEmail: { type: String, default: "", lowercase: true, trim: true },
   },
   { timestamps: true },
 );
