@@ -123,15 +123,6 @@ type AppNotification = {
   createdAt: string;
 };
 
-type AuditLogItem = {
-  _id: string;
-  actor: string;
-  action: string;
-  target?: string;
-  payload?: unknown;
-  createdAt: string;
-};
-
 type AdminUserRow = {
   email: string;
   role: Role;
@@ -2094,11 +2085,11 @@ const statusChartColors: Record<string, string> = {
   Rejected: "#ef4444",
 };
 
-function rankedTotals(rows: ReportRow[], key: string, limit = 8) {
+function rankedTotals(rows: ReportRow[], key: string, valueKey: "quantity" | "dispatches" = "quantity", limit = 8) {
   const totals = new Map<string, number>();
   for (const row of rows) {
     const label = String(row[key] || "Unknown").trim() || "Unknown";
-    totals.set(label, (totals.get(label) ?? 0) + Number(row.quantity || 0));
+    totals.set(label, (totals.get(label) ?? 0) + Number(row[valueKey] || 0));
   }
   return [...totals.entries()]
     .filter(([, value]) => value > 0)
@@ -2246,7 +2237,7 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
         <Kpi label="Outlets Involved" value={uniqueOutlets} icon={Store} tone="neutral" />
       </div>
       <TicketsOverTimeChart rows={rows} />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <RankedBarChart
           title="Tickets by account manager"
           subtitle="Top requesters by ticket volume in the current filters."
@@ -2259,6 +2250,12 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
           data={rankedTotals(rows, "outlet")}
           emptyText="No outlet activity in the current filters."
         />
+        <RankedBarChart
+          title="Clients invited the most"
+          subtitle="Outlets with the most ticket emails actually sent."
+          data={rankedTotals(rows, "outlet", "dispatches")}
+          emptyText="No ticket emails have been sent in the current filters."
+        />
       </div>
       <StatusBreakdownChart rows={rows} />
     </div>
@@ -2267,13 +2264,10 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
 
 function ReportsPanel() {
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [reportSearch, setReportSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [auditActor, setAuditActor] = useState("");
-  const [auditAction, setAuditAction] = useState("");
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [exporting, setExporting] = useState<"csv" | "pdf" | "">("");
   const [loadingReport, setLoadingReport] = useState(false);
@@ -2312,17 +2306,6 @@ function ReportsPanel() {
     }
   }, [reportParams]);
 
-  const loadAuditLogs = useCallback(async () => {
-    const params = new URLSearchParams();
-    params.set("limit", "120");
-    if (auditActor) params.set("actor", auditActor);
-    if (auditAction) params.set("action", auditAction);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    const data = await api<{ logs: AuditLogItem[] }>(`/api/audit-logs?${params.toString()}`);
-    setAuditLogs(data.logs);
-  }, [auditAction, auditActor, dateFrom, dateTo]);
-
   async function exportPdf() {
     setExportNotice(null);
     setExporting("pdf");
@@ -2337,8 +2320,7 @@ function ReportsPanel() {
         startY: 22,
       });
       doc.save("bacardi-ticket-report.pdf");
-      setExportNotice({ message: "PDF exported and audit log updated.", tone: "good" });
-      await loadAuditLogs();
+      setExportNotice({ message: "PDF exported.", tone: "good" });
     } catch (error) {
       setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
     } finally {
@@ -2362,8 +2344,7 @@ function ReportsPanel() {
       link.download = "bacardi-ticket-report.csv";
       link.click();
       URL.revokeObjectURL(url);
-      setExportNotice({ message: "CSV exported and audit log updated.", tone: "good" });
-      await loadAuditLogs();
+      setExportNotice({ message: "CSV exported.", tone: "good" });
     } catch (error) {
       setExportNotice({ message: error instanceof Error ? error.message : "Unable to export CSV.", tone: "bad" });
     } finally {
@@ -2378,26 +2359,14 @@ function ReportsPanel() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadAuditLogs();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [loadAuditLogs]);
-
-  const formatAuditPayload = (payload: unknown) => {
-    if (!payload || typeof payload !== "object") return "";
-    const text = JSON.stringify(payload);
-    return text.length > 140 ? `${text.slice(0, 140)}...` : text;
-  };
-
   return (
     <div className="space-y-4">
-      <AnalyticsSection rows={filteredRows} />
-
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Request report</h2>
+          <div>
+            <h2 className="text-lg font-semibold">Filters</h2>
+            <p className="mt-1 text-sm text-stone-600">Drives the charts below and the request table.</p>
+          </div>
           <div className="flex gap-2">
             <ActionButton variant="secondary" disabled={Boolean(exporting)} onClick={() => void exportCsv()}>
               <Download size={16} /> {exporting === "csv" ? "Exporting CSV..." : "CSV"}
@@ -2429,6 +2398,12 @@ function ReportsPanel() {
           </Field>
         </div>
         {loadingReport && <p className="mt-3 text-sm text-stone-500">Loading report...</p>}
+      </div>
+
+      <AnalyticsSection rows={filteredRows} />
+
+      <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">Request report</h2>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b text-stone-600">
@@ -2451,45 +2426,6 @@ function ReportsPanel() {
           </table>
         </div>
         {filteredRows.length === 0 && <EmptyState text={rows.length === 0 ? "No report rows are available yet." : "No report rows match the current filters."} />}
-      </div>
-
-      <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Audit log</h2>
-            <p className="mt-1 text-sm text-stone-600">Tracked manager actions, request changes, dispatches, user updates, and report exports.</p>
-          </div>
-          <ActionButton variant="secondary" onClick={() => void loadAuditLogs()}>
-            <RefreshCcw size={16} /> Refresh
-          </ActionButton>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Field label="Actor">
-            <input className={inputClass} value={auditActor} onChange={(event) => setAuditActor(event.target.value)} placeholder="Filter by manager email" />
-          </Field>
-          <Field label="Action">
-            <input className={inputClass} value={auditAction} onChange={(event) => setAuditAction(event.target.value)} placeholder="Example: request, dispatch, report" />
-          </Field>
-        </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-sm">
-            <thead className="border-b text-stone-600">
-              <tr><th className="py-2">Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Details</th></tr>
-            </thead>
-            <tbody className="divide-y">
-              {auditLogs.map((log) => (
-                <tr key={log._id}>
-                  <td className="py-3 whitespace-nowrap">{formatShortDate(log.createdAt)}</td>
-                  <td>{log.actor}</td>
-                  <td>{log.action}</td>
-                  <td>{log.target || "-"}</td>
-                  <td className="max-w-[420px] truncate text-stone-600">{formatAuditPayload(log.payload) || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {auditLogs.length === 0 && <EmptyState text="No audit records match the current filters." />}
       </div>
     </div>
   );
