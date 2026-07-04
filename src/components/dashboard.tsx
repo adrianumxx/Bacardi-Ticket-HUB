@@ -602,10 +602,10 @@ export function Dashboard() {
           } ${sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[260px]"} w-[286px]`}
         >
           <div className="flex h-full flex-col border-r border-stone-200 bg-white shadow-xl lg:shadow-none">
-            <div className={`flex h-20 items-center gap-3 border-b border-stone-200 px-4 ${sidebarCollapsed ? "lg:justify-center" : "justify-between"}`}>
-              <div className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
+            <div className={`flex h-20 items-center gap-3 border-b border-stone-200 px-4 justify-between ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+              <div className="flex min-w-0 items-center gap-3">
                 <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={52} height={52} className="h-12 w-12 shrink-0 object-contain" unoptimized />
-                <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                <div className="min-w-0">
                   <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#EB6A1C]">Bacardi</p>
                   <p className="truncate text-sm font-semibold">Ticket Hub</p>
                 </div>
@@ -615,7 +615,7 @@ export function Dashboard() {
               </ActionButton>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Dashboard sections">
+            <nav className="flex-1 space-y-1 overflow-y-auto p-3 lg:pt-4" aria-label="Dashboard sections">
               {tabs.map(([id, label, Icon]) => (
                 <ActionButton
                   key={id as string}
