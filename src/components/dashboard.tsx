@@ -1429,12 +1429,12 @@ function UserTable({
   managers?: AdminUserRow[];
 }) {
   return (
-    <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
-        <h2 className="font-semibold">{title}</h2>
+        <h2 className="text-sm font-semibold">{title}</h2>
         <CountPill label="Users" value={rows.length} />
       </div>
-      <div className="hidden grid-cols-[minmax(200px,1.1fr)_150px_150px_140px_150px_220px] gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:grid">
+      <div className="hidden grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] gap-3 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">
         <span>User</span>
         <span>Role</span>
         <span>Team</span>
@@ -1442,60 +1442,51 @@ function UserTable({
         <span>Access</span>
         <span className="text-right">Actions</span>
       </div>
-      <div className="divide-y divide-stone-200">
+      <div className="divide-y divide-stone-100">
         {rows.map((user) => (
-          <div key={`${title}-${user.email}`} className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(200px,1.1fr)_150px_150px_140px_150px_220px] xl:items-center">
-            <div className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-stone-950">{user.email}</span>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
-                <span>{user.lastLoginAt ? `Last login ${formatDate(user.lastLoginAt)}` : "No login yet"}</span>
-                <span>{user.source}</span>
+          <div
+            key={`${title}-${user.email}`}
+            className="grid gap-2.5 px-4 py-3 transition-colors hover:bg-stone-50/60 xl:grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] xl:items-center xl:gap-3"
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[11px] font-semibold uppercase text-stone-500">
+                {user.email.slice(0, 2)}
+              </span>
+              <div className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-stone-950">{user.email}</span>
+                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-stone-400">
+                  <span>{user.lastLoginAt ? formatDate(user.lastLoginAt) : "No login yet"}</span>
+                  <span>&middot;</span>
+                  <span className="truncate">{user.source}</span>
+                </div>
               </div>
             </div>
-            <Field label="Role">
-              <select
-                className={`${inputClass} min-h-10 py-1.5`}
-                value={user.role}
-                disabled={busyEmail === user.email}
-                onChange={(event) => void onUpdate(user.email, { role: event.target.value as Role, accessEnabled: true })}
-              >
-                <option value="account_manager">Account manager</option>
-                <option value="super_admin">Manager</option>
-              </select>
-            </Field>
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Team</span>
-              {user.role === "account_manager" ? (
-                <select
-                  className={`${inputClass} min-h-10 py-1.5`}
-                  value={user.managerEmail || ""}
-                  disabled={busyEmail === user.email || managers.length === 0}
-                  onChange={(event) => void onUpdate(user.email, { managerEmail: event.target.value })}
-                >
-                  <option value="">Unassigned</option>
-                  {managers.map((manager) => (
-                    <option key={manager.email} value={manager.email}>
-                      {manager.email}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-sm text-stone-400">-</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 xl:block">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Status</span>
-              <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
-            </div>
-            <div className="flex items-center gap-2 xl:block">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Access</span>
-              <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Approval missing"}</Badge>
-            </div>
-            <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+            <MiniSelect
+              value={user.role}
+              disabled={busyEmail === user.email}
+              onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
+              options={[
+                { value: "account_manager", label: "Account manager" },
+                { value: "super_admin", label: "Manager" },
+              ]}
+            />
+            {user.role === "account_manager" ? (
+              <MiniSelect
+                value={user.managerEmail || ""}
+                disabled={busyEmail === user.email || managers.length === 0}
+                onChange={(value) => void onUpdate(user.email, { managerEmail: value })}
+                options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.email }))]}
+              />
+            ) : (
+              <span className="text-xs text-stone-300">-</span>
+            )}
+            <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
+            <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved" : "Missing"}</Badge>
+            <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">
               <ActionButton
                 variant="secondary"
                 disabled={busyEmail === user.email}
-                className="min-h-9 px-3"
+                className="min-h-7 px-2.5 text-[11px]"
                 onClick={() => {
                   const blocking = user.status !== "blocked";
                   if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
@@ -1503,28 +1494,30 @@ function UserTable({
                   }
                 }}
               >
-                {busyEmail === user.email ? "Updating..." : user.status === "blocked" ? "Unblock" : "Block"}
+                {busyEmail === user.email ? "..." : user.status === "blocked" ? "Unblock" : "Block"}
               </ActionButton>
               {user.accessEnabled ? (
                 <ActionButton
                   variant="ghost"
                   disabled={busyEmail === user.email}
-                  className="min-h-9 px-3"
+                  className="min-h-7 px-2.5 text-[11px]"
                   onClick={() => {
                     if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
                       void onUpdate(user.email, { accessEnabled: false });
                     }
                   }}
                 >
-                  Disable access
+                  Disable
                 </ActionButton>
               ) : (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-9 px-3" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
+                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-7 px-2.5 text-[11px]" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>
+                  Approve
+                </ActionButton>
               )}
               <ActionButton
                 variant="ghost"
                 disabled={busyEmail === user.email}
-                className="min-h-9 px-3 text-red-700"
+                className="min-h-7 px-2.5 text-[11px] text-red-600"
                 onClick={() => void onDelete(user.email)}
               >
                 Delete
@@ -1534,6 +1527,36 @@ function UserTable({
         ))}
         {rows.length === 0 && <div className="p-4 text-sm text-stone-500">No users found.</div>}
       </div>
+    </div>
+  );
+}
+
+function MiniSelect({
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full appearance-none truncate rounded-full border border-stone-200 bg-stone-50 py-1.5 pl-3 pr-6 text-xs font-medium text-stone-700 transition focus:border-[#EB6A1C] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-stone-400" />
     </div>
   );
 }
