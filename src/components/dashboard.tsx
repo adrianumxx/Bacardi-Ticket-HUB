@@ -1318,19 +1318,31 @@ function NotificationList({ notifications }: { notifications: NotificationRecord
 
 function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: AdminUserRow[]; busyEmail: string; onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void> }) {
   return (
-    <div className="rounded-md border border-stone-250 bg-white shadow-sm">
-      <div className="border-b p-4"><h2 className="font-semibold">{title}</h2></div>
-      <div className="divide-y">
+    <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+        <h2 className="font-semibold">{title}</h2>
+        <CountPill label="Users" value={rows.length} />
+      </div>
+      <div className="hidden grid-cols-[minmax(220px,1.35fr)_190px_170px_170px_220px] gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:grid">
+        <span>User</span>
+        <span>Role</span>
+        <span>Status</span>
+        <span>Access</span>
+        <span className="text-right">Actions</span>
+      </div>
+      <div className="divide-y divide-stone-200">
         {rows.map((user) => (
-          <div key={`${title}-${user.email}`} className="grid gap-3 p-4 lg:grid-cols-[1.2fr_220px_220px_auto] lg:items-center">
-            <div>
-              <span className="text-sm font-medium">{user.email}</span>
-              {user.lastLoginAt && <p className="text-xs text-stone-500">Last login {formatDate(user.lastLoginAt)}</p>}
-              <p className="text-xs text-stone-500">{user.source}</p>
+          <div key={`${title}-${user.email}`} className="grid gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,1.35fr)_190px_170px_170px_220px] xl:items-center">
+            <div className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-stone-950">{user.email}</span>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
+                <span>{user.lastLoginAt ? `Last login ${formatDate(user.lastLoginAt)}` : "No login yet"}</span>
+                <span>{user.source}</span>
+              </div>
             </div>
             <Field label="Role">
               <select
-                className={inputClass}
+                className={`${inputClass} min-h-10 py-1.5`}
                 value={user.role}
                 disabled={busyEmail === user.email}
                 onChange={(event) => void onUpdate(user.email, { role: event.target.value as Role, accessEnabled: true })}
@@ -1339,14 +1351,19 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
                 <option value="super_admin">Manager</option>
               </select>
             </Field>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 xl:block">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Status</span>
               <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
+            </div>
+            <div className="flex items-center gap-2 xl:block">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 xl:hidden">Access</span>
               <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Approval missing"}</Badge>
             </div>
-            <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+            <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
               <ActionButton
                 variant="secondary"
                 disabled={busyEmail === user.email}
+                className="min-h-10 px-3"
                 onClick={() => {
                   const blocking = user.status !== "blocked";
                   if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
@@ -1360,6 +1377,7 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
                 <ActionButton
                   variant="ghost"
                   disabled={busyEmail === user.email}
+                  className="min-h-10 px-3"
                   onClick={() => {
                     if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
                       void onUpdate(user.email, { accessEnabled: false });
@@ -1369,7 +1387,7 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
                   Disable access
                 </ActionButton>
               ) : (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
+                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-10 px-3" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
               )}
             </div>
           </div>
