@@ -626,10 +626,10 @@ export function Dashboard() {
               ))}
             </nav>
 
-            <div className="border-t border-stone-200 p-3">
-              <div className={`glass-pill rounded-md bg-stone-50/70 p-3 ${sidebarCollapsed ? "lg:px-2" : ""}`}>
+            <div className={`border-t border-stone-200 p-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+              <div className="glass-pill rounded-md bg-stone-50/70 p-3">
                 <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
-                <p className={`mt-2 truncate text-xs text-stone-500 ${sidebarCollapsed ? "lg:hidden" : ""}`}>{session?.user?.email}</p>
+                <p className="mt-2 truncate text-xs text-stone-500">{session?.user?.email}</p>
               </div>
             </div>
           </div>
