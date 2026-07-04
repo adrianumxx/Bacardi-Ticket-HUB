@@ -1384,17 +1384,19 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
   const published = events.filter((event) => event.status === "published");
   const [eventId, setEventId] = useState("");
   const outletIdCounter = useRef(1);
-  const [outletNames, setOutletNames] = useState([{ id: "outlet-1", name: "" }]);
+  const [outletRows, setOutletRows] = useState([{ id: "outlet-1", name: "", quantity: 1 }]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const effectiveEventId = eventId || published[0]?._id || "";
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
-  const validOutletNames = outletNames.map((outlet) => outlet.name.trim()).filter(Boolean);
+  const validOutletRows = outletRows
+    .map((outlet) => ({ name: outlet.name.trim(), quantity: outlet.quantity }))
+    .filter((outlet) => outlet.name);
   const blockedReason =
     published.length === 0
       ? "No published events or festivals are available."
-      : validOutletNames.length === 0
+      : validOutletRows.length === 0
         ? "Add at least one outlet client name."
         : ticketTypes.length === 0
           ? "The selected event or festival has no active ticket types."
@@ -1402,15 +1404,19 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
 
   function addOutletName() {
     outletIdCounter.current += 1;
-    setOutletNames((current) => [...current, { id: `outlet-${outletIdCounter.current}`, name: "" }]);
+    setOutletRows((current) => [...current, { id: `outlet-${outletIdCounter.current}`, name: "", quantity: 1 }]);
   }
 
   function updateOutletName(id: string, name: string) {
-    setOutletNames((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, name } : outlet)));
+    setOutletRows((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, name } : outlet)));
+  }
+
+  function updateOutletQuantity(id: string, quantity: number) {
+    setOutletRows((current) => current.map((outlet) => (outlet.id === id ? { ...outlet, quantity } : outlet)));
   }
 
   function removeOutletName(id: string) {
-    setOutletNames((current) => (current.length === 1 ? current : current.filter((outlet) => outlet.id !== id)));
+    setOutletRows((current) => (current.length === 1 ? current : current.filter((outlet) => outlet.id !== id)));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -1425,16 +1431,16 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
         method: "POST",
         body: JSON.stringify({
           eventId: form.get("eventId"),
-          outlets: validOutletNames.map((name) => ({ name })),
+          outlets: validOutletRows,
           recipientEmails: form.get("recipientEmails"),
-          items: [{ ticketType: form.get("ticketType"), quantity: form.get("quantity") }],
+          items: [{ ticketType: form.get("ticketType"), quantity: 1 }],
           notes: form.get("notes"),
         }),
       });
       formElement.reset();
       outletIdCounter.current = 1;
-      setOutletNames([{ id: "outlet-1", name: "" }]);
-      notify(validOutletNames.length > 1 ? `${validOutletNames.length} requests submitted for manager review.` : "Request submitted for manager review.");
+      setOutletRows([{ id: "outlet-1", name: "", quantity: 1 }]);
+      notify(validOutletRows.length > 1 ? `${validOutletRows.length} requests submitted for manager review.` : "Request submitted for manager review.");
       await onDone();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit the request.";
@@ -1470,8 +1476,8 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
 
       <Step title="2. Outlet">
         <div className="grid gap-3" aria-label="Outlet clients">
-          {outletNames.map((outlet, index) => (
-            <div key={outlet.id} className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          {outletRows.map((outlet, index) => (
+            <div key={outlet.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
               <Field label={index === 0 ? "Outlet client name" : `Outlet client name ${index + 1}`}>
                 <input
                   value={outlet.name}
@@ -1482,8 +1488,19 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                   required={index === 0}
                 />
               </Field>
+              <Field label="Quantity">
+                <input
+                  value={outlet.quantity}
+                  onChange={(event) => updateOutletQuantity(outlet.id, Number(event.target.value))}
+                  type="number"
+                  min={1}
+                  max={selectedEvent?.maxTicketsPerOutlet ?? undefined}
+                  className={inputClass}
+                  required
+                />
+              </Field>
               <div className="flex gap-2">
-                {outletNames.length > 1 && (
+                {outletRows.length > 1 && (
                   <ActionButton
                     type="button"
                     variant="secondary"
@@ -1495,7 +1512,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                     <X size={17} />
                   </ActionButton>
                 )}
-                {index === outletNames.length - 1 && (
+                {index === outletRows.length - 1 && (
                   <ActionButton
                     type="button"
                     variant="ghost"
@@ -1514,14 +1531,11 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
       </Step>
 
       <Step title="3. Tickets">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           <Field label="Ticket type">
             <select name="ticketType" className={inputClass} disabled={ticketTypes.length === 0}>
               {ticketTypes.map((type) => <option key={type.name} value={type.name}>{type.name}</option>)}
             </select>
-          </Field>
-          <Field label="Quantity">
-            <input name="quantity" type="number" min={1} max={selectedEvent?.maxTicketsPerOutlet ?? undefined} defaultValue={1} className={inputClass} />
           </Field>
         </div>
       </Step>

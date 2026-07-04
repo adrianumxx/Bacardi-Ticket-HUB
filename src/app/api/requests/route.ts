@@ -63,10 +63,6 @@ export async function POST(request: Request) {
       return badRequest("This event or festival is not available for new requests.");
     }
 
-    const requestedQty = requestedQuantity(input.items);
-    if (requestedQty > event.maxTicketsPerOutlet) {
-      return badRequest(`This event or festival allows a maximum of ${event.maxTicketsPerOutlet} ticket(s) per outlet.`);
-    }
     const ticketTypeError = validateTicketTypes(event, input.items);
     if (ticketTypeError) return badRequest(ticketTypeError);
 
@@ -74,7 +70,7 @@ export async function POST(request: Request) {
       input.outlets?.length
         ? input.outlets
         : input.newOutlet
-          ? [{ name: input.newOutlet.name }]
+          ? [{ name: input.newOutlet.name, quantity: requestedQuantity(input.items) }]
           : [];
     const createdRequests: Array<{ _id: unknown }> = [];
     async function rollbackAndBadRequest(message: string) {
@@ -89,6 +85,17 @@ export async function POST(request: Request) {
     for (const outletInput of outletInputs.length > 0 ? outletInputs : [{ name: "" }]) {
       let outletId = input.outletId;
       let outlet: LeanOutlet | null = null;
+      const outletItems = input.items.map((item) => ({
+        ...item,
+        quantity: outletInput.quantity ?? item.quantity,
+      }));
+      const requestedQty = requestedQuantity(outletItems);
+
+      if (requestedQty > event.maxTicketsPerOutlet) {
+        return rollbackAndBadRequest(
+          `This event or festival allows a maximum of ${event.maxTicketsPerOutlet} ticket(s) per outlet.`,
+        );
+      }
 
       if (outletInput.name) {
         outlet = (await Outlet.findOne({
@@ -124,7 +131,7 @@ export async function POST(request: Request) {
         requestedBy: user.email,
         accountManagerName: user.name,
         recipientEmails: input.recipientEmails,
-        items: input.items,
+        items: outletItems,
         notes: input.notes,
         history: [
           {

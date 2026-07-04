@@ -82,7 +82,14 @@ export const createRequestSchema = z.object({
   eventId: z.string().min(1),
   outletId: z.string().optional(),
   newOutlet: outletSchema.optional(),
-  outlets: z.array(outletSchema.pick({ name: true })).optional(),
+  outlets: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2),
+        quantity: z.coerce.number().int().min(1).optional(),
+      }),
+    )
+    .optional(),
   recipientEmails: z
     .string()
     .optional()
