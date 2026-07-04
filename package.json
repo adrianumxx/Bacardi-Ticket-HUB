@@ -13,12 +13,12 @@
     "check": "npm run lint && npm run test:unit && npm run build"
   },
   "dependencies": {
+    "@iconify/react": "^6.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
-    "lucide-react": "^1.23.0",
     "mongoose": "^9.7.3",
     "next": "16.2.10",
     "next-auth": "^4.24.14",

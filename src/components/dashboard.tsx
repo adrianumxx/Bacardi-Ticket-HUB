@@ -27,7 +27,7 @@ import {
   X,
   XCircle,
   type LucideIcon,
-} from "lucide-react";
+} from "@/components/ui/solar-icons";
 import {
   renderEventStatus,
   renderHistoryAction,
@@ -147,7 +147,7 @@ type ManagerStat = {
 };
 
 const inputClass =
-  "min-h-11 rounded-none border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 shadow-sm transition focus:border-[#b8860b] disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500";
+  "min-h-11 rounded-none border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 shadow-sm transition focus:border-[#EB6A1C] disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500";
 
 function statusTone(status: RequestStatus): Tone {
   if (status === "approved") return "good";
@@ -292,19 +292,19 @@ export function LoginScreen() {
   }
 
   return (
-    <main className="min-h-screen bg-[#fafaf8] text-stone-950">
+    <main className="min-h-screen bg-[#FFFCF6] text-stone-950">
       <section className="mx-auto grid min-h-screen w-full max-w-5xl items-center gap-10 px-6 py-10 lg:grid-cols-[0.9fr_1fr]">
         <div className="space-y-5">
           <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={116} height={116} className="h-28 w-28 object-contain" priority unoptimized />
-          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[#b8860b]">Bacardi Ticket Hub</p>
-          <h1 className="max-w-xl text-4xl font-semibold leading-tight text-[#1a1a18] sm:text-5xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[#EB6A1C]">Bacardi Ticket Hub</p>
+          <h1 className="max-w-xl text-4xl font-semibold leading-tight text-[#3A2A18] sm:text-5xl">
             Your platform for ticket requests.
           </h1>
         </div>
 
-        <div className="border border-[#e8e8e6] bg-white p-8 shadow-sm">
+        <div className="border border-[#ECDFC8] bg-white p-8 shadow-sm">
           <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b8860b]">Private access</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#EB6A1C]">Private access</p>
             <h2 className="mt-2 text-3xl font-semibold">{mode === "signin" ? "Sign in with email" : "Request an account"}</h2>
           </div>
           <div className="mb-5 grid grid-cols-2 gap-1 p-1">
@@ -488,10 +488,10 @@ export function Dashboard() {
 
   if (status === "loading" || !role) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f6f2] px-6 text-stone-950">
+      <main className="flex min-h-screen items-center justify-center bg-[#FFFCF6] px-6 text-stone-950">
         <div className="grid justify-items-center gap-4 text-center">
           <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={76} height={76} className="h-20 w-20 object-contain" priority unoptimized />
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b8860b]">Bacardi Ticket Hub</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#EB6A1C]">Bacardi Ticket Hub</p>
           <p className="text-sm text-stone-600">Loading your workspace...</p>
         </div>
       </main>
@@ -499,8 +499,8 @@ export function Dashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f6f2] text-stone-950">
-      <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#fafaf8]/95 backdrop-blur">
+    <main className="min-h-screen bg-[#FFFCF6] text-stone-950">
+      <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#FFFCF6]/95 backdrop-blur">
         <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <ActionButton
@@ -515,7 +515,7 @@ export function Dashboard() {
             </ActionButton>
             <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={44} height={44} className="h-11 w-11 shrink-0 object-contain" priority unoptimized />
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">Bacardi Ticket Hub</p>
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#EB6A1C]">Bacardi Ticket Hub</p>
               <h1 className="truncate text-lg font-semibold sm:text-xl">{activeLabel}</h1>
             </div>
           </div>
@@ -545,7 +545,7 @@ export function Dashboard() {
             >
               <Bell size={22} />
               {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#b8860b] px-1 text-[10px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#EB6A1C] px-1 text-[10px] font-bold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -596,7 +596,7 @@ export function Dashboard() {
               <div className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
                 <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={52} height={52} className="h-12 w-12 shrink-0 object-contain" unoptimized />
                 <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">Bacardi</p>
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#EB6A1C]">Bacardi</p>
                   <p className="truncate text-sm font-semibold">Ticket Hub</p>
                 </div>
               </div>
@@ -639,7 +639,7 @@ export function Dashboard() {
         <section className="min-w-0 flex-1 space-y-5 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Workspace</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Workspace</p>
               <h2 className="mt-1 text-2xl font-semibold">{activeLabel}</h2>
             </div>
             <p className="max-w-2xl text-sm leading-6 text-stone-600">
@@ -703,7 +703,7 @@ function NotificationDrawer({
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 p-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Notifications</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Notifications</p>
             <h2 className="mt-1 text-xl font-semibold">Inbox</h2>
             <p className="mt-1 text-sm text-stone-600">{unreadCount} unread notification(s)</p>
           </div>
@@ -774,7 +774,7 @@ const kpiTones = {
   good: { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700" },
   warn: { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700" },
   bad: { bar: "bg-red-400", chip: "bg-red-50 text-red-700" },
-  gold: { bar: "bg-[#b8860b]", chip: "bg-[#fbf1da] text-[#8a6508]" },
+  gold: { bar: "bg-[#EB6A1C]", chip: "bg-[#ECDFC8] text-[#7A4A1C]" },
 } as const;
 
 function Kpi({ label, value, icon: Icon, tone = "neutral" }: { label: string; value: number; icon: LucideIcon; tone?: keyof typeof kpiTones }) {
@@ -799,7 +799,7 @@ function PanelIntro({ eyebrow, title, description, meta }: { eyebrow: string; ti
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 px-4 py-4">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">{eyebrow}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{eyebrow}</p>
         <h2 className="mt-1 text-xl font-semibold">{title}</h2>
         {description && <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">{description}</p>}
       </div>
@@ -965,7 +965,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
     <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_1fr]">
       <form onSubmit={submit} className="space-y-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Setup</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Setup</p>
           <h2 className="mt-1 text-lg font-semibold">Create sponsored item</h2>
           <p className="mt-1 text-sm leading-6 text-stone-600">Publish the event or festival before account managers can request tickets.</p>
         </div>
@@ -1151,7 +1151,7 @@ function UsersPanel({
     <div className="grid gap-5 xl:grid-cols-[minmax(300px,360px)_1fr]">
       <form onSubmit={submit} className="space-y-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Access control</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Access control</p>
           <h2 className="text-lg font-semibold">Create account access</h2>
           <p className="mt-1 text-sm text-stone-600">Create an approved account directly, or review requests from the queue.</p>
         </div>
@@ -1628,8 +1628,8 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
 
   return (
     <section className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
-      <div className="rounded-md border border-[#1a1a18] bg-[#1a1a18] p-5 text-white shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d5a51b]">Manager performance</p>
+      <div className="rounded-md border border-[#3A2A18] bg-[#3A2A18] p-5 text-white shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ECDFC8]">Manager performance</p>
         <h2 className="mt-2 text-2xl font-semibold">Requests by account manager</h2>
         <div className="mt-5 grid grid-cols-3 gap-3">
           <MiniStat label="Managers" value={totals.managers} />
@@ -1641,10 +1641,10 @@ function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
             <div key={row.email}>
               <div className="mb-1 flex items-center justify-between gap-3 text-sm">
                 <span className="truncate font-medium">{row.name}</span>
-                <span className="text-[#d5a51b]">{row.requests} requests</span>
+                <span className="text-[#ECDFC8]">{row.requests} requests</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-white/15">
-                <div className="h-full rounded-full bg-[#d5a51b]" style={{ width: `${Math.max(8, (row.requests / maxRequests) * 100)}%` }} />
+                <div className="h-full rounded-full bg-[#ECDFC8]" style={{ width: `${Math.max(8, (row.requests / maxRequests) * 100)}%` }} />
               </div>
             </div>
           ))}
@@ -1720,8 +1720,8 @@ function FlowMap() {
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <div className="grid gap-3 md:grid-cols-4">
         {steps.map(([number, title, text]) => (
-          <div key={number} className="border-l-2 border-[#d5a51b] pl-3">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#b8860b]">Step {number}</span>
+          <div key={number} className="border-l-2 border-[#ECDFC8] pl-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#EB6A1C]">Step {number}</span>
             <h3 className="mt-1 font-semibold">{title}</h3>
             <p className="mt-1 text-sm leading-6 text-stone-600">{text}</p>
           </div>
@@ -1763,7 +1763,7 @@ function DropZoneFiles({ name }: { name: string }) {
         setFiles(event.dataTransfer.files);
       }}
       className={`cursor-pointer rounded-md border-2 border-dashed p-5 text-center transition ${
-        dragOver ? "border-[#b8860b] bg-[#fbf1da]" : "border-stone-300 bg-stone-50 hover:border-stone-400"
+        dragOver ? "border-[#EB6A1C] bg-[#ECDFC8]" : "border-stone-300 bg-stone-50 hover:border-stone-400"
       }`}
     >
       <input
@@ -1844,7 +1844,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Send ticket files</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Send ticket files</p>
                 <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
               </div>
               <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
@@ -1873,7 +1873,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
       {pendingSend && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
           <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Confirm dispatch</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Confirm dispatch</p>
             <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
             <p className="mt-2 text-sm leading-6 text-stone-600">
               Send {pendingSend.fileCount} attachment(s) to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
@@ -2157,7 +2157,7 @@ type ReportRow = Record<string, string | number>;
 
 // Single-hue gold ramp, validated for a sequential/ordinal magnitude encoding
 // (light->dark, monotonic lightness, clears contrast at the light end).
-const magnitudeRamp = ["#d4af37", "#c19323", "#a97815", "#8a6508", "#5f4506"];
+const magnitudeRamp = ["#ECDFC8", "#c19323", "#a97815", "#7A4A1C", "#5f4506"];
 
 const statusChartColors: Record<string, string> = {
   Pending: "#a8a29e",
