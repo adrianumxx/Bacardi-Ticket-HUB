@@ -711,21 +711,25 @@ function NotificationDrawer({
             <X size={18} />
           </ActionButton>
         </div>
-        <div className="flex flex-wrap gap-2 border-b border-stone-200 p-3">
-          {filters.map((item) => (
-            <ActionButton
-              key={item.id}
-              type="button"
-              variant={filter === item.id ? "primary" : "secondary"}
-              className="min-h-9 px-3 text-xs"
-              onClick={() => onFilter(item.id)}
-            >
-              {item.label}
+        <div className="space-y-3 border-b border-stone-200 p-3">
+          <div className="flex flex-wrap gap-2">
+            {filters.map((item) => (
+              <ActionButton
+                key={item.id}
+                type="button"
+                variant={filter === item.id ? "primary" : "secondary"}
+                className="min-h-9 px-3 text-xs"
+                onClick={() => onFilter(item.id)}
+              >
+                {item.label}
+              </ActionButton>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => void onReadAll()}>
+              Mark all read
             </ActionButton>
-          ))}
-          <ActionButton type="button" variant="secondary" className="ml-auto min-h-9 px-3 text-xs" onClick={() => void onReadAll()}>
-            Mark all read
-          </ActionButton>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {notifications.map((notification) => (
@@ -1571,7 +1575,7 @@ function AdminRequests({ requests, events, outlets, onDone, notify }: { requests
     <div className="space-y-4">
       <ManagerAnalytics rows={managerStats} />
       <FlowMap />
-      <div className="grid gap-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm lg:grid-cols-4">
+      <div className="grid gap-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Status">
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}>
             <option value="all">All statuses</option>
@@ -1930,7 +1934,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           </div>
         </section>
 
-        <div className="grid gap-3 lg:grid-cols-[180px_1fr_1fr_auto]">
+        <div className="grid items-end gap-3 lg:grid-cols-[180px_1fr_1fr_auto]">
           <Field label="Status">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value as RequestStatus)}>
               <option value="pending">Pending</option>
@@ -1945,7 +1949,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           <Field label="Admin notes">
             <input className={inputClass} value={adminNotes} onChange={(event) => setAdminNotes(event.target.value)} />
           </Field>
-          <ActionButton className="mt-6" variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
+          <ActionButton variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
@@ -2391,7 +2395,7 @@ function ReportsPanel() {
           </div>
         </div>
         {exportNotice && <div className="mt-4"><Notice message={exportNotice.message} tone={exportNotice.tone} /></div>}
-        <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_180px_180px]">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_1fr_180px_180px]">
           <Field label="Status">
             <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
