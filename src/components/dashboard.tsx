@@ -229,7 +229,7 @@ function ActionButton({
   return (
     <button
       {...props}
-      className={`glass-button-text inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold disabled:cursor-not-allowed ${classes[variant]} ${props.className ?? ""}`}
+      className={`glass-button-text inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold disabled:cursor-not-allowed ${classes[variant]} ${props.className ?? ""}`}
     >
       {children}
     </button>
@@ -511,7 +511,7 @@ export function Dashboard() {
             <ActionButton
               type="button"
               variant="secondary"
-              className="h-11 w-11 min-h-0 px-0 lg:hidden"
+              className="h-9 w-9 min-h-0 px-0 lg:hidden"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
               aria-expanded={mobileNavOpen}
@@ -528,7 +528,7 @@ export function Dashboard() {
             <ActionButton
               type="button"
               variant="secondary"
-              className="hidden h-11 w-11 min-h-0 px-0 lg:inline-flex"
+              className="hidden h-9 w-9 min-h-0 px-0 lg:inline-flex"
               onClick={() => setSidebarCollapsed((current) => !current)}
               title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             >
@@ -538,13 +538,13 @@ export function Dashboard() {
               <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
-            <ActionButton type="button" variant="secondary" className="h-11 w-11 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
               <RefreshCcw size={22} className={loading ? "animate-spin" : ""} />
             </ActionButton>
             <ActionButton
               type="button"
               variant="secondary"
-              className="relative h-11 w-11 min-h-0 px-0"
+              className="relative h-9 w-9 min-h-0 px-0"
               onClick={() => setNotificationsOpen(true)}
               title="Notifications"
             >
@@ -555,7 +555,7 @@ export function Dashboard() {
                 </span>
               )}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" className="h-11 w-11 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
               <LogOut size={22} />
             </ActionButton>
           </div>
@@ -1206,6 +1206,20 @@ function UsersPanel({
     }
   }
 
+  async function deleteUser(email: string) {
+    if (!window.confirm(`Delete the account for ${email}? This removes their access and profile permanently.`)) return;
+    setBusyEmail(email);
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(email)}`, { method: "DELETE" });
+      notify("Account deleted.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to delete the account.", "bad");
+    } finally {
+      setBusyEmail("");
+    }
+  }
+
   const allowedMap = new Map(users.allowedUsers.map((user) => [user.email, user]));
   const profileMap = new Map(users.profiles.map((profile) => [profile.email, profile]));
   const combinedRows: AdminUserRow[] = [...new Set([...users.allowedUsers.map((user) => user.email), ...users.profiles.map((profile) => profile.email)])]
@@ -1254,7 +1268,7 @@ function UsersPanel({
             </div>
           </Field>
         </div>
-        <UserTable title="Users and access" rows={visibleRows} busyEmail={busyEmail} onUpdate={updateUser} />
+        <UserTable title="Users and access" rows={visibleRows} busyEmail={busyEmail} onUpdate={updateUser} onDelete={deleteUser} />
       </div>
     </div>
   );
@@ -1390,7 +1404,19 @@ function NotificationList({ notifications }: { notifications: NotificationRecord
   );
 }
 
-function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: AdminUserRow[]; busyEmail: string; onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void> }) {
+function UserTable({
+  title,
+  rows,
+  busyEmail,
+  onUpdate,
+  onDelete,
+}: {
+  title: string;
+  rows: AdminUserRow[];
+  busyEmail: string;
+  onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean }) => Promise<void>;
+  onDelete: (email: string) => Promise<void>;
+}) {
   return (
     <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
@@ -1437,7 +1463,7 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
               <ActionButton
                 variant="secondary"
                 disabled={busyEmail === user.email}
-                className="min-h-10 px-3"
+                className="min-h-9 px-3"
                 onClick={() => {
                   const blocking = user.status !== "blocked";
                   if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
@@ -1451,7 +1477,7 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
                 <ActionButton
                   variant="ghost"
                   disabled={busyEmail === user.email}
-                  className="min-h-10 px-3"
+                  className="min-h-9 px-3"
                   onClick={() => {
                     if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
                       void onUpdate(user.email, { accessEnabled: false });
@@ -1461,8 +1487,16 @@ function UserTable({ title, rows, busyEmail, onUpdate }: { title: string; rows: 
                   Disable access
                 </ActionButton>
               ) : (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-10 px-3" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
+                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-9 px-3" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>Approve access</ActionButton>
               )}
+              <ActionButton
+                variant="ghost"
+                disabled={busyEmail === user.email}
+                className="min-h-9 px-3 text-red-700"
+                onClick={() => void onDelete(user.email)}
+              >
+                Delete
+              </ActionButton>
             </div>
           </div>
         ))}
@@ -1607,7 +1641,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                     variant="secondary"
                     aria-label={`Remove outlet client ${index + 1}`}
                     title="Remove outlet"
-                    className="aspect-square min-h-11 w-11 px-0"
+                    className="aspect-square min-h-9 w-9 px-0"
                     onClick={() => removeOutletName(outlet.id)}
                   >
                     <X size={17} />
@@ -1619,7 +1653,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                     variant="ghost"
                     aria-label="Add another outlet client"
                     title="Add outlet"
-                    className="aspect-square min-h-11 w-11 px-0"
+                    className="aspect-square min-h-9 w-9 px-0"
                     onClick={addOutletName}
                   >
                     <Plus size={18} />
