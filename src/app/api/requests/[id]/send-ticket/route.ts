@@ -1,5 +1,5 @@
-import { errorResponse, json } from "@/lib/api";
-import { requireSuperAdmin } from "@/lib/authz";
+import { errorResponse, forbidden, json } from "@/lib/api";
+import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { sendTicketSchema } from "@/lib/schemas";
@@ -20,7 +20,10 @@ function fileExtension(name: string) {
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireSuperAdmin();
+    // Both the manager and the account manager who owns the request can send
+    // ticket files -- whoever is available at the venue gate should be able
+    // to email them out, not just the manager.
+    const user = await requireUser();
     await connectDb();
     const { id } = await context.params;
     const formData = await request.formData();
@@ -50,6 +53,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     const ticketRequest = await TicketRequest.findById(id).populate("event").populate("outlet");
     if (!ticketRequest) return json({ error: "Request not found" }, { status: 404 });
+    if (user.role !== "super_admin" && ticketRequest.requestedBy !== user.email) {
+      return forbidden("You can only send ticket files for your own requests.");
+    }
     if (!["approved", "partially_approved"].includes(ticketRequest.status)) {
       return json({ error: "Approve or partially approve the request before sending ticket files." }, { status: 400 });
     }

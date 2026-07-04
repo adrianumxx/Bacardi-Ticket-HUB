@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   AlertCircle,
@@ -661,7 +661,7 @@ export function Dashboard() {
           {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
-          {currentTab === "mine" && <MinePanel requests={requests} />}
+          {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
         </section>
       </div>
     </main>
@@ -1731,21 +1731,174 @@ function FlowMap() {
   );
 }
 
+function DropZoneFiles({ name }: { name: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [fileNames, setFileNames] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+
+  function setFiles(fileList: FileList | null) {
+    if (inputRef.current) inputRef.current.files = fileList;
+    setFileNames(fileList ? Array.from(fileList).map((file) => file.name) : []);
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragOver(false);
+        setFiles(event.dataTransfer.files);
+      }}
+      className={`cursor-pointer rounded-md border-2 border-dashed p-5 text-center transition ${
+        dragOver ? "border-[#b8860b] bg-[#fbf1da]" : "border-stone-300 bg-stone-50 hover:border-stone-400"
+      }`}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        name={name}
+        multiple
+        className="hidden"
+        onChange={(event) => setFiles(event.target.files)}
+      />
+      <Send size={20} className="mx-auto text-stone-400" />
+      <p className="mt-2 text-sm font-medium text-stone-700">Drag & drop ticket files here, or click to browse</p>
+      <p className="mt-1 text-xs text-stone-500">PDF, PNG, JPG, or ZIP - up to 15 MB total.</p>
+      {fileNames.length > 0 && (
+        <ul className="mt-3 grid gap-1 text-left text-xs text-stone-700">
+          {fileNames.map((fileName) => (
+            <li key={fileName} className="truncate rounded bg-white px-2 py-1 border border-stone-200">{fileName}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+  const [showSendWindow, setShowSendWindow] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
+  const canSendTickets = request.status === "approved" || request.status === "partially_approved";
+  const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+
+  async function sendTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSendTickets) return notify("Approve or partially approve the request before sending ticket files.", "bad");
+    const form = new FormData(event.currentTarget);
+    const recipientList = splitEmails(String(form.get("recipients") || ""));
+    const files = form.getAll("files").filter((file): file is File => file instanceof File && file.size > 0);
+    if (recipientList.length === 0) return notify("Add at least one recipient email before sending tickets.", "bad");
+    if (files.length === 0) return notify("Attach at least one ticket file before sending.", "bad");
+    setPendingSend({ formData: form, form: event.currentTarget, recipients: recipientList, fileCount: files.length });
+  }
+
+  async function confirmSendTicket() {
+    if (!pendingSend) return;
+    setSending(true);
+    try {
+      await api(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
+      pendingSend.form.reset();
+      setPendingSend(null);
+      setShowSendWindow(false);
+      notify("Ticket email sent or simulated. Check dispatch history for details.");
+      await onDone();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to send the ticket email.", "bad");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
+        <div>
+          <h4 className="text-sm font-semibold">Ticket files</h4>
+          <p className="text-sm text-stone-600">
+            {canSendTickets
+              ? "Approved: attach files and email them to anyone you choose."
+              : "Approve or partially approve this request first, then send ticket files here."}
+          </p>
+        </div>
+        <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
+          <Send size={16} /> Send ticket files
+        </ActionButton>
+      </div>
+
+      {showSendWindow && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Send ticket files</p>
+                <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
+              </div>
+              <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
+                <X size={18} />
+              </ActionButton>
+            </div>
+            <form onSubmit={sendTicket} className="mt-4 grid gap-3">
+              <Field label="Email recipients" hint="Send to anyone - separate multiple addresses with a comma.">
+                <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
+              </Field>
+              <Field label="Subject">
+                <input name="subject" required defaultValue={`Bacardi tickets for ${request.event?.name}`} className={inputClass} />
+              </Field>
+              <Field label="Message body">
+                <textarea name="message" required defaultValue={defaultMessage} className={inputClass} rows={4} />
+              </Field>
+              <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
+                <DropZoneFiles name="files" />
+              </Field>
+              <ActionButton disabled={!canSendTickets}><Send size={16} /> Send ticket email</ActionButton>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {pendingSend && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
+          <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Confirm dispatch</p>
+            <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
+            <p className="mt-2 text-sm leading-6 text-stone-600">
+              Send {pendingSend.fileCount} attachment(s) to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
+              <ActionButton disabled={sending} onClick={() => void confirmSendTicket()}>{sending ? "Sending..." : "Confirm send"}</ActionButton>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const [status, setStatus] = useState<RequestStatus>(request.status);
   const [adminNotes, setAdminNotes] = useState(request.adminNotes || "");
   const [recipients, setRecipients] = useState(request.recipientEmails.join(", "));
   const [updating, setUpdating] = useState(false);
-  const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState("");
   const [approvedByIndex, setApprovedByIndex] = useState<Record<number, number>>(() =>
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
-  const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
   const [quickAction, setQuickAction] = useState<"" | "approved" | "rejected">("");
-  const [showSendWindow, setShowSendWindow] = useState(false);
-  const canSendTickets = request.status === "approved" || request.status === "partially_approved";
-  const defaultMessage = `Attached are the approved ticket file(s) for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
 
   // One-click approve/reject for the common case, visible directly on the
   // collapsed row so the manager never has to open a request just to approve
@@ -1808,39 +1961,6 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
       notify(message, "bad");
     } finally {
       setUpdating(false);
-    }
-  }
-
-  async function sendTicket(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (request.status !== "approved" && request.status !== "partially_approved") {
-      return notify("Approve or partially approve the request before sending ticket files.", "bad");
-    }
-    const form = new FormData(event.currentTarget);
-    const recipientList = splitEmails(String(form.get("recipients") || ""));
-    const files = form.getAll("files").filter((file): file is File => file instanceof File && file.size > 0);
-    if (recipientList.length === 0) return notify("Add at least one recipient email before sending tickets.", "bad");
-    if (files.length === 0) return notify("Attach at least one ticket file before sending.", "bad");
-    setPendingSend({ formData: form, form: event.currentTarget, recipients: recipientList, fileCount: files.length });
-  }
-
-  async function confirmSendTicket() {
-    if (!pendingSend) return;
-    setSending(true);
-    setActionError("");
-    try {
-      await api<{ delivery: { status: string } }>(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
-      pendingSend.form.reset();
-      setPendingSend(null);
-      setShowSendWindow(false);
-      notify("Ticket email sent or simulated. Check dispatch history for details.");
-      await onDone();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to send the ticket email.";
-      setActionError(message);
-      notify(message, "bad");
-    } finally {
-      setSending(false);
     }
   }
 
@@ -1952,66 +2072,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           <ActionButton variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
-          <div>
-            <h4 className="text-sm font-semibold">Ticket files</h4>
-            <p className="text-sm text-stone-600">
-              {canSendTickets
-                ? "Approve is decided. Open the send window to attach files and email the tickets."
-                : "Approve or partially approve this request first, then send ticket files here."}
-            </p>
-          </div>
-          <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
-            <Send size={16} /> Send ticket files
-          </ActionButton>
-        </div>
-
-        {showSendWindow && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
-            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Send ticket files</p>
-                  <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
-                </div>
-                <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
-                  <X size={18} />
-                </ActionButton>
-              </div>
-              <form onSubmit={sendTicket} className="mt-4 grid gap-3">
-                <Field label="Email recipients">
-                  <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
-                </Field>
-                <Field label="Subject">
-                  <input name="subject" required defaultValue={`Bacardi tickets for ${request.event?.name}`} className={inputClass} />
-                </Field>
-                <Field label="Message body">
-                  <textarea name="message" required defaultValue={defaultMessage} className={inputClass} rows={4} />
-                </Field>
-                <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
-                  <input name="files" type="file" multiple required className={inputClass} />
-                </Field>
-                <ActionButton disabled={!canSendTickets}><Send size={16} /> Send ticket email</ActionButton>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {pendingSend && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
-            <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#b8860b]">Confirm dispatch</p>
-              <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
-              <p className="mt-2 text-sm leading-6 text-stone-600">
-                Send {pendingSend.fileCount} attachment(s) to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
-              </p>
-              <div className="mt-4 flex flex-wrap justify-end gap-2">
-                <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
-                <ActionButton disabled={sending} onClick={() => void confirmSendTicket()}>{sending ? "Sending..." : "Confirm send"}</ActionButton>
-              </div>
-            </div>
-          </div>
-        )}
+        <SendTicketPanel request={request} onDone={onDone} notify={notify} />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <HistoryList history={request.history} />
@@ -2060,11 +2121,11 @@ function DispatchList({ dispatches }: { dispatches: TicketRequest["dispatches"] 
   );
 }
 
-function MinePanel({ requests }: { requests: TicketRequest[] }) {
+function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const nextStep = (request: TicketRequest) => {
     if (request.status === "pending") return "Next: a manager reviews the outlet, quantities, recipients, and notes.";
-    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: the manager can now send ticket files by email.";
-    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: the manager can now send the available tickets.";
+    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: you or the manager can now send ticket files by email.";
+    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: you or the manager can now send the available tickets.";
     return "Rejected: review the manager note before creating a corrected request.";
   };
 
@@ -2082,7 +2143,9 @@ function MinePanel({ requests }: { requests: TicketRequest[] }) {
           <div className="mt-3 flex flex-wrap gap-2">{request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}</div>
           {request.adminNotes && <p className="mt-3 rounded-md bg-stone-100 p-3 text-sm">{request.adminNotes}</p>}
           <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">{nextStep(request)}</p>
-          <p className="mt-3 text-sm text-stone-600">Ticket files are sent by email from the manager to the agreed recipients.</p>
+          <div className="mt-3">
+            <SendTicketPanel request={request} onDone={onDone} notify={notify} />
+          </div>
         </article>
       ))}
       {requests.length === 0 && <EmptyState text="You have not created any requests yet." />}
