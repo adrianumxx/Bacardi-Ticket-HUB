@@ -1413,7 +1413,9 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
     .map((outlet) => ({ name: outlet.name.trim(), quantity: outlet.quantity }))
     .filter((outlet) => outlet.name);
   const blockedReason =
-    published.length === 0
+    submittedMessage
+      ? ""
+      : published.length === 0
       ? "No published events or festivals are available."
       : validOutletRows.length === 0
         ? "Add at least one outlet client name."
@@ -1590,10 +1592,18 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                     <p className="font-semibold">Request sent</p>
                     <p className="mt-1">{submittedMessage}</p>
                   </div>
-                  <ActionButton type="button" variant="secondary" className="w-fit" onClick={() => setSubmittedMessage("")}>
-                    <Plus size={16} />
-                    Send another request
-                  </ActionButton>
+          <ActionButton
+            type="button"
+            variant="secondary"
+            className="w-fit"
+            onClick={() => {
+              setSubmittedMessage("");
+              setFormError("");
+            }}
+          >
+            <Plus size={16} />
+            Send another request
+          </ActionButton>
                 </div>
               </div>
             </div>
