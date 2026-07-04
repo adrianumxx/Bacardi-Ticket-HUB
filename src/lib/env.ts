@@ -15,9 +15,5 @@ export function env() {
 }
 
 export function validateProductionEnv() {
-  const parsed = env();
-  if (process.env.NODE_ENV === "production" && parsed.RESEND_API_KEY && parsed.MAIL_FROM.includes("tickets@example.com")) {
-    throw new Error("MAIL_FROM must be a verified sender when RESEND_API_KEY is configured in production.");
-  }
-  return parsed;
+  return env();
 }

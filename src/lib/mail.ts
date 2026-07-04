@@ -31,8 +31,13 @@ export async function sendMail(input: SendMailInput) {
     return { status: "simulated" as const, providerId: "" };
   }
 
+  const from = process.env.MAIL_FROM || "Bacardi Ticket Hub <tickets@example.com>";
+  if (process.env.NODE_ENV === "production" && from.includes("tickets@example.com")) {
+    throw new Error("MAIL_FROM must be a verified sender when RESEND_API_KEY is configured in production.");
+  }
+
   const result = await resend.emails.send({
-    from: process.env.MAIL_FROM || "Bacardi Ticket Hub <tickets@example.com>",
+    from,
     to: input.to,
     replyTo: input.replyTo,
     subject: input.subject,
