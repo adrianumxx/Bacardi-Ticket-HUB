@@ -6,6 +6,8 @@ import { formatDate } from "@/lib/utils";
 import type { AppNotification, NotificationRecord, Tone } from "./types";
 import { dispatchLabel, dispatchTone, notificationTone } from "./helpers";
 import { ActionButton, Badge, CountPill, EmptyState } from "./ui-primitives";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { localeMap } from "@/lib/i18n/translations";
 
 export function NotificationDrawer({
   notifications,
@@ -32,14 +34,15 @@ export function NotificationDrawer({
   onDelete: (id: string) => Promise<void>;
   onDeleteMany: (ids: string[]) => Promise<void>;
 }) {
+  const { t, language } = useTranslation();
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const filters: { id: "all" | "unread" | AppNotification["category"]; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "unread", label: "Unread" },
-    { id: "requests", label: "Requests" },
-    { id: "accounts", label: "Accounts" },
-    { id: "tickets", label: "Tickets" },
+    { id: "all", label: t("notifications.filterAll") },
+    { id: "unread", label: t("notifications.filterUnread") },
+    { id: "requests", label: t("notifications.filterRequests") },
+    { id: "accounts", label: t("notifications.filterAccounts") },
+    { id: "tickets", label: t("notifications.filterTickets") },
   ];
   const visibleIds = notifications.map((notification) => notification._id);
   const selectedSet = new Set(selectedIds);
@@ -64,7 +67,7 @@ export function NotificationDrawer({
 
   async function deleteSelected() {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Delete ${selectedIds.length} selected notification${selectedIds.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    if (!window.confirm(t("notifications.deleteConfirm", { count: selectedIds.length, plural: selectedIds.length === 1 ? "" : "s" }))) return;
     await onDeleteMany(selectedIds);
     setSelectedIds([]);
     setSelecting(false);
@@ -79,23 +82,23 @@ export function NotificationDrawer({
 
   return (
     <div className="fixed inset-0 z-[70]">
-      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close notifications" />
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("notifications.close")} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 p-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Notifications</p>
-            <h2 className="mt-1 text-xl font-semibold">Inbox</h2>
-            <p className="mt-1 text-sm text-stone-600">{unreadCount} unread notification{unreadCount === 1 ? "" : "s"}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("notifications.title")}</p>
+            <h2 className="mt-1 text-xl font-semibold">{t("notifications.inbox")}</h2>
+            <p className="mt-1 text-sm text-stone-600">{t("notifications.unreadCount", { count: unreadCount, plural: unreadCount === 1 ? "" : "s" })}</p>
           </div>
-          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close">
+          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label={t("notifications.close")}>
             <X size={18} />
           </ActionButton>
         </div>
         <div className="space-y-3 border-b border-stone-200 p-3">
           <div className="grid grid-cols-3 gap-2">
-            <NotificationCounter label="Visible" value={notifications.length} />
-            <NotificationCounter label="Unread" value={unreadVisible} tone={unreadVisible > 0 ? "warn" : "neutral"} />
-            <NotificationCounter label="Email failed" value={failedEmails} tone={failedEmails > 0 ? "bad" : "neutral"} />
+            <NotificationCounter label={t("notifications.visible")} value={notifications.length} />
+            <NotificationCounter label={t("notifications.unread")} value={unreadVisible} tone={unreadVisible > 0 ? "warn" : "neutral"} />
+            <NotificationCounter label={t("notifications.emailFailed")} value={failedEmails} tone={failedEmails > 0 ? "bad" : "neutral"} />
           </div>
           <div className="flex flex-wrap gap-2">
             {filters.map((item) => (
@@ -125,30 +128,30 @@ export function NotificationDrawer({
                   setSelectedIds([]);
                 }}
               >
-                {selecting ? "Cancel selection" : "Select messages"}
+                {selecting ? t("notifications.cancelSelection") : t("notifications.selectMessages")}
               </ActionButton>
               {selecting && (
                 <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={toggleAllVisible} disabled={notifications.length === 0}>
-                  {allVisibleSelected ? "Clear visible" : "Select all visible"}
+                  {allVisibleSelected ? t("notifications.clearVisible") : t("notifications.selectAllVisible")}
                 </ActionButton>
               )}
             </div>
             <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => void onReadAll()}>
-              Mark all read
+              {t("notifications.markAllRead")}
             </ActionButton>
           </div>
           {selecting && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-stone-200 bg-stone-50 p-2">
-              <span className="text-xs font-medium text-stone-600">{selectedIds.length} selected</span>
+              <span className="text-xs font-medium text-stone-600">{t("notifications.selectedCount", { count: selectedIds.length })}</span>
               <div className="flex flex-wrap gap-2">
                 <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void markSelected(true)}>
-                  Mark read
+                  {t("notifications.markRead")}
                 </ActionButton>
                 <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void markSelected(false)}>
-                  Mark unread
+                  {t("notifications.markUnread")}
                 </ActionButton>
                 <ActionButton type="button" variant="ghost" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void deleteSelected()}>
-                  Delete
+                  {t("notifications.delete")}
                 </ActionButton>
               </div>
             </div>
@@ -164,40 +167,42 @@ export function NotificationDrawer({
                     className="mt-1 h-4 w-4 accent-[#EB6A1C]"
                     checked={selectedSet.has(notification._id)}
                     onChange={() => toggleSelected(notification._id)}
-                    aria-label={`Select notification: ${notification.title}`}
+                    aria-label={t("notifications.selectNotification", { title: notification.title })}
                   />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? "Read" : "Unread"}</Badge>
-                    {notification.priority === "high" && <Badge tone="bad">High priority</Badge>}
-                    <Badge tone={dispatchTone(notification.emailStatus)}>{notification.emailStatus === "skipped" ? "In-app only" : `Email ${dispatchLabel(notification.emailStatus)}`}</Badge>
+                    <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? t("notifications.read") : t("notifications.unread")}</Badge>
+                    {notification.priority === "high" && <Badge tone="bad">{t("notifications.highPriority")}</Badge>}
+                    <Badge tone={dispatchTone(notification.emailStatus)}>
+                      {notification.emailStatus === "skipped" ? t("notifications.inAppOnly") : t("notifications.emailStatusPrefix", { status: dispatchLabel(notification.emailStatus) })}
+                    </Badge>
                   </div>
                   <h3 className="mt-2 font-semibold">{notification.title}</h3>
                   <p className="mt-1 whitespace-pre-line text-sm leading-6 text-stone-600">{notification.message}</p>
-                  <p className="mt-2 text-xs text-stone-500">{formatDate(notification.createdAt)} - {notification.actor}</p>
+                  <p className="mt-2 text-xs text-stone-500">{formatDate(notification.createdAt, localeMap[language])} - {notification.actor}</p>
                   {notification.emailError && <p className="mt-1 text-xs text-red-700">{notification.emailError}</p>}
                 </div>
               </div>
               {!selecting && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>{notificationContextLabel(notification.category)}</ActionButton>
+                  <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>{notificationContextLabel(notification.category, t)}</ActionButton>
                   <ActionButton variant="ghost" onClick={() => void onRead(notification._id, !notification.read)}>
-                    Mark {notification.read ? "unread" : "read"}
+                    {notification.read ? t("notifications.markUnreadAction") : t("notifications.markReadAction")}
                   </ActionButton>
                   <ActionButton
                     variant="ghost"
                     onClick={() => {
-                      if (window.confirm("Delete this notification? This cannot be undone.")) void onDelete(notification._id);
+                      if (window.confirm(t("notifications.deleteOneConfirm"))) void onDelete(notification._id);
                     }}
                   >
-                    Delete
+                    {t("notifications.delete")}
                   </ActionButton>
                 </div>
               )}
             </article>
           ))}
-          {notifications.length === 0 && <div className="p-4"><EmptyState text="No notifications match this filter." /></div>}
+          {notifications.length === 0 && <div className="p-4"><EmptyState text={t("notifications.emptyFiltered")} /></div>}
         </div>
       </aside>
     </div>
@@ -220,21 +225,24 @@ export function NotificationCounter({ label, value, tone = "neutral" }: { label:
   );
 }
 
-export function notificationContextLabel(category: AppNotification["category"]) {
-  if (category === "accounts" || category === "users") return "Open users";
-  if (category === "tickets" || category === "requests") return "Open requests";
-  if (category === "events" || category === "outlets") return "Open events";
-  if (category === "reports") return "Open reports";
-  return "Open workspace";
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+export function notificationContextLabel(category: AppNotification["category"], t: TranslateFn) {
+  if (category === "accounts" || category === "users") return t("notifications.openUsers");
+  if (category === "tickets" || category === "requests") return t("notifications.openRequests");
+  if (category === "events" || category === "outlets") return t("notifications.openEvents");
+  if (category === "reports") return t("notifications.openReports");
+  return t("notifications.openWorkspace");
 }
 
 
 export function NotificationList({ notifications }: { notifications: NotificationRecord[] }) {
+  const { t, language } = useTranslation();
   return (
     <section className="rounded-md border border-stone-200 bg-white p-3">
       <div className="flex items-center justify-between gap-3">
-        <h4 className="text-sm font-semibold">Notifications</h4>
-        <CountPill label="Total" value={notifications.length} />
+        <h4 className="text-sm font-semibold">{t("notifications.title")}</h4>
+        <CountPill label={t("notifications.total")} value={notifications.length} />
       </div>
       <div className="mt-3 space-y-3">
         {notifications.map((notification, index) => (
@@ -246,16 +254,14 @@ export function NotificationList({ notifications }: { notifications: Notificatio
             <p className="text-stone-600">{notification.subject}</p>
             <p className="break-words text-stone-600">
               <Mail className="mr-1 inline" size={14} />
-              {notification.recipients.length ? notification.recipients.join(", ") : "No recipients configured"}
+              {notification.recipients.length ? notification.recipients.join(", ") : t("notifications.noRecipients")}
             </p>
             {notification.error && <p className="text-red-700">{notification.error}</p>}
-            <p className="text-xs text-stone-500">{formatDate(notification.at)}</p>
+            <p className="text-xs text-stone-500">{formatDate(notification.at, localeMap[language])}</p>
           </div>
         ))}
-        {notifications.length === 0 && <p className="text-sm text-stone-500">No account notifications recorded yet.</p>}
+        {notifications.length === 0 && <p className="text-sm text-stone-500">{t("notifications.noAccountNotifications")}</p>}
       </div>
     </section>
   );
 }
-
-
