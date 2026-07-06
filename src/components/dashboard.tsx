@@ -2485,6 +2485,35 @@ function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => v
 
 type ReportRow = Record<string, string | number>;
 
+type ManagerSummary = {
+  manager: string;
+  requests: number;
+  tickets: number;
+  approvedTickets: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  dispatches: number;
+  outlets: Map<string, number>;
+  events: Map<string, number>;
+  latest?: string;
+};
+
+type FestivalSummary = {
+  key: string;
+  event: string;
+  eventKind: string;
+  requested: number;
+  approvedTickets: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  outlets: Set<string>;
+  dispatches: number;
+  latest?: string;
+  rows: ReportRow[];
+};
+
 const magnitudeRamp = ["#14b8a6", "#f59e0b", "#ef4444", "#6366f1", "#7A4A1C"];
 
 const statusChartColors: Record<string, string> = {
@@ -2753,24 +2782,8 @@ function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
   );
 }
 
-function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
-  const managers = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        manager: string;
-        requests: number;
-        tickets: number;
-        pending: number;
-        approved: number;
-        rejected: number;
-        dispatches: number;
-        outlets: Map<string, number>;
-        events: Map<string, number>;
-        latest?: string;
-      }
-    >();
-
+function buildManagerSummaries(rows: ReportRow[]) {
+  const map = new Map<string, ManagerSummary>();
     for (const row of rows) {
       const manager = String(row.accountManager || "Unknown manager").trim() || "Unknown manager";
       const current =
@@ -2779,6 +2792,7 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
           manager,
           requests: 0,
           tickets: 0,
+          approvedTickets: 0,
           pending: 0,
           approved: 0,
           rejected: 0,
@@ -2790,6 +2804,7 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
       const status = String(row.status || "");
       current.requests += 1;
       current.tickets += Number(row.quantity || 0);
+      current.approvedTickets += Number(row.approved || 0);
       current.dispatches += Number(row.dispatches || 0);
       if (status === "Pending") current.pending += 1;
       if (status === "Approved" || status === "Partially approved") current.approved += 1;
@@ -2803,8 +2818,11 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
       map.set(manager, current);
     }
 
-    return [...map.values()].sort((a, b) => b.tickets - a.tickets || b.requests - a.requests);
-  }, [rows]);
+  return [...map.values()].sort((a, b) => b.tickets - a.tickets || b.requests - a.requests);
+}
+
+function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }: { rows: ReportRow[]; selectedManager: string | null; onSelectManager: (manager: string) => void }) {
+  const managers = useMemo(() => buildManagerSummaries(rows), [rows]);
   const maxTickets = Math.max(...managers.map((manager) => manager.tickets), 1);
 
   return (
@@ -2820,7 +2838,7 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
         <div className="mt-4"><EmptyState text="No account manager activity in the current filters." /></div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-md border border-stone-200">
-          <div className="hidden grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px] gap-3 bg-stone-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:grid">
+          <div className="hidden grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] gap-3 bg-stone-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:grid">
             <span>Manager</span>
             <span>Requests</span>
             <span>Tickets</span>
@@ -2828,6 +2846,7 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
             <span>Top outlet</span>
             <span>Top event</span>
             <span>Latest</span>
+            <span className="text-center">Report</span>
           </div>
           <div className="divide-y divide-stone-200">
             {managers.map((manager) => {
@@ -2835,7 +2854,13 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
               const topEvent = [...manager.events.entries()].sort((a, b) => b[1] - a[1])[0];
               const approvalRate = manager.requests ? Math.round((manager.approved / manager.requests) * 100) : 0;
               return (
-                <div key={manager.manager} className="grid gap-3 px-3 py-3 text-sm xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px] xl:items-center">
+                <button
+                  key={manager.manager}
+                  type="button"
+                  className={`grid w-full cursor-pointer gap-3 px-3 py-3 text-left text-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#EB6A1C]/40 xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] xl:items-center ${selectedManager === manager.manager ? "bg-amber-50/60" : ""}`}
+                  onClick={() => onSelectManager(manager.manager)}
+                  aria-label={`View report for ${manager.manager}`}
+                >
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-stone-950" title={manager.manager}>{manager.manager}</p>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
@@ -2855,7 +2880,8 @@ function ManagerActivityMatrix({ rows }: { rows: ReportRow[] }) {
                   <TextMetric label="Top outlet" value={topOutlet ? `${topOutlet[0]} (${topOutlet[1]})` : "No outlet"} />
                   <TextMetric label="Top event" value={topEvent ? `${topEvent[0]} (${topEvent[1]})` : "No event"} />
                   <TextMetric label="Latest" value={manager.latest ? formatShortDate(manager.latest) : "-"} />
-                </div>
+                  <span className="inline-flex min-h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 shadow-sm">View report</span>
+                </button>
               );
             })}
           </div>
@@ -2883,7 +2909,140 @@ function TextMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
+function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; rows: ReportRow[]; onClose: () => void }) {
+  const managerRows = useMemo(() => rows.filter((row) => String(row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
+  const summary = useMemo(() => buildManagerSummaries(managerRows)[0], [managerRows]);
+  const festivals = useMemo(() => {
+    const map = new Map<string, FestivalSummary>();
+    for (const row of managerRows) {
+      const event = String(row.event || "No event").trim() || "No event";
+      const eventKind = String(row.eventKind || "Event");
+      const key = `${eventKind}:${event}`;
+      const current =
+        map.get(key) ??
+        {
+          key,
+          event,
+          eventKind,
+          requested: 0,
+          approvedTickets: 0,
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          outlets: new Set<string>(),
+          dispatches: 0,
+          latest: undefined,
+          rows: [],
+        };
+      const status = String(row.status || "");
+      current.requested += Number(row.quantity || 0);
+      current.approvedTickets += Number(row.approved || 0);
+      current.dispatches += Number(row.dispatches || 0);
+      if (status === "Pending") current.pending += 1;
+      if (status === "Approved" || status === "Partially approved") current.approved += 1;
+      if (status === "Rejected") current.rejected += 1;
+      const outlet = String(row.outlet || "").trim();
+      if (outlet) current.outlets.add(outlet);
+      const createdAt = String(row.createdAt || "");
+      if (createdAt && (!current.latest || new Date(createdAt) > new Date(current.latest))) current.latest = createdAt;
+      current.rows.push(row);
+      map.set(key, current);
+    }
+    return [...map.values()].sort((a, b) => b.requested - a.requested || a.event.localeCompare(b.event));
+  }, [managerRows]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[75]">
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close account manager report" />
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-stone-200 bg-[#FFFCF6] shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Account manager report</p>
+            <h2 className="mt-1 truncate text-xl font-semibold">{manager}</h2>
+            <p className="mt-1 text-sm text-stone-600">Filtered report by festival/event, outlet, status, and dispatch activity.</p>
+          </div>
+          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+            <X size={18} />
+          </ActionButton>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          {summary ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <InsightMetric label="Requests" value={summary.requests} detail="Created in the current filters." />
+                <InsightMetric label="Tickets requested" value={summary.tickets} detail={`${summary.approvedTickets} approved ticket(s).`} tone="good" />
+                <InsightMetric label="Pending / rejected" value={`${summary.pending} / ${summary.rejected}`} detail="Items needing attention or declined." tone={summary.pending > 0 ? "warn" : "neutral"} />
+                <InsightMetric label="Ticket emails" value={summary.dispatches} detail={`Latest activity ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
+              </div>
+
+              <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-semibold">Festival and event breakdown</h3>
+                <p className="mt-0.5 text-xs text-stone-500">Each block shows what this account manager requested for a specific festival/event.</p>
+                <div className="mt-4 space-y-3">
+                  {festivals.map((festival) => (
+                    <div key={festival.key} className="rounded-md border border-stone-200 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="truncate font-semibold text-stone-950">{festival.event}</h4>
+                            <Badge tone={festival.eventKind === "Festival" ? "warn" : "neutral"}>{festival.eventKind}</Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-stone-500">{festival.outlets.size} outlet(s) · latest {festival.latest ? formatShortDate(festival.latest) : "-"}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge tone="neutral">{festival.requested} requested</Badge>
+                          <Badge tone="good">{festival.approvedTickets} approved</Badge>
+                          <Badge tone={festival.pending > 0 ? "warn" : "neutral"}>{festival.pending} pending</Badge>
+                          <Badge tone={festival.rejected > 0 ? "bad" : "neutral"}>{festival.rejected} rejected</Badge>
+                          <Badge tone="neutral">{festival.dispatches} dispatches</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-semibold">Request details</h3>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="border-b text-stone-600">
+                      <tr><th className="py-2">Date</th><th>Festival/Event</th><th>Outlet</th><th>Ticket types</th><th>Status</th><th>Dispatches</th></tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {managerRows.map((row) => (
+                        <tr key={String(row.id)}>
+                          <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt)) : "-"}</td>
+                          <td>{row.event}</td>
+                          <td>{row.outlet}</td>
+                          <td>{row.ticketTypes}</td>
+                          <td>{String(row.status)}</td>
+                          <td>{row.dispatches}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          ) : (
+            <EmptyState text="No activity for this account manager in the current filters." />
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function AnalyticsSection({ rows, selectedManager, onSelectManager }: { rows: ReportRow[]; selectedManager: string | null; onSelectManager: (manager: string) => void }) {
   const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const totalDispatches = rows.reduce((sum, row) => sum + Number(row.dispatches || 0), 0);
@@ -2930,7 +3089,7 @@ function AnalyticsSection({ rows }: { rows: ReportRow[] }) {
         <StatusBreakdownChart rows={rows} />
         <EventPerformanceChart rows={rows} />
       </div>
-      <ManagerActivityMatrix rows={rows} />
+      <ManagerActivityMatrix rows={rows} selectedManager={selectedManager} onSelectManager={onSelectManager} />
       <div className="grid gap-3 sm:grid-cols-3">
         <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
         <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
@@ -2946,6 +3105,7 @@ function ReportsPanel() {
   const [reportSearch, setReportSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [selectedManager, setSelectedManager] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [exporting, setExporting] = useState<"csv" | "pdf" | "">("");
   const [loadingReport, setLoadingReport] = useState(false);
@@ -3078,7 +3238,8 @@ function ReportsPanel() {
         {loadingReport && <p className="mt-3 text-sm text-stone-500">Loading report...</p>}
       </div>
 
-      <AnalyticsSection rows={filteredRows} />
+      <AnalyticsSection rows={filteredRows} selectedManager={selectedManager} onSelectManager={setSelectedManager} />
+      {selectedManager && <ManagerDrilldownPanel manager={selectedManager} rows={filteredRows} onClose={() => setSelectedManager(null)} />}
 
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Request report</h2>
