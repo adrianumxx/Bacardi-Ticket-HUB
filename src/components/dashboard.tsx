@@ -3357,25 +3357,25 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
   } as const;
 
   return (
-    <details className={`overflow-hidden rounded-md border border-l-4 border-stone-250 bg-white p-4 shadow-sm transition hover:shadow-md ${borderTones[statusTone(request.status)]}`}>
-      <summary className="grid cursor-pointer list-none gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.9fr)_auto] md:items-center">
+    <details className={`group overflow-hidden rounded-md border border-l-4 border-stone-250 bg-white shadow-sm transition hover:border-[#ECDFC8] hover:shadow-md ${borderTones[statusTone(request.status)]}`}>
+      <summary className="grid cursor-pointer list-none gap-3 px-4 py-3 lg:grid-cols-[minmax(260px,1.2fr)_minmax(360px,0.95fr)_auto] lg:items-center">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-lg font-semibold">{request.event?.name}</h3>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+            <h3 className="min-w-0 truncate text-base font-semibold">{request.event?.name}</h3>
           </div>
-          <p className="mt-1 text-sm text-stone-600">{request.outlet?.name}</p>
+          <p className="mt-1 truncate text-sm font-medium text-stone-800">{request.outlet?.name}</p>
           <p className="mt-0.5 truncate text-xs text-stone-500" title={request.requestedBy}>
-            {managerName}{request.accountManagerName ? ` · ${request.requestedBy}` : ""}
+            {managerName}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
-          <RequestMetric label="Requested" value={requestedTotal} />
-          <RequestMetric label="Approved" value={approvedTotal} tone={approvedTotal > 0 ? "good" : "neutral"} />
-          <RequestMetric label="Recipients" value={request.recipientEmails.length} />
-          <RequestMetric label="Dispatches" value={dispatchCount} tone={dispatchCount > 0 ? "good" : "neutral"} />
+        <div className="grid grid-cols-4 gap-2">
+          <CompactRequestMetric label="Req" value={requestedTotal} />
+          <CompactRequestMetric label="Appr" value={approvedTotal} tone={approvedTotal > 0 ? "good" : "neutral"} />
+          <CompactRequestMetric label="To" value={request.recipientEmails.length} />
+          <CompactRequestMetric label="Sent" value={dispatchCount} tone={dispatchCount > 0 ? "good" : "neutral"} />
         </div>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-between gap-2 lg:justify-end">
           {request.status === "pending" && (
             <div className="flex items-center gap-2">
               <ActionButton
@@ -3406,12 +3406,12 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
               </ActionButton>
             </div>
           )}
-          <span className="hidden whitespace-nowrap text-sm text-stone-500 md:inline">{formatShortDate(request.createdAt)}</span>
-          <ChevronDown size={18} className="text-stone-400" />
+          <span className="whitespace-nowrap text-sm text-stone-500">{formatShortDate(request.createdAt)}</span>
+          <ChevronDown size={18} className="text-stone-400 transition group-open:rotate-180" />
         </div>
       </summary>
 
-      <div className="mt-4 grid gap-4 border-t border-stone-200 pt-4">
+      <div className="grid gap-4 border-t border-stone-200 p-4">
         {actionError && <Notice message={actionError} tone="bad" />}
         <div className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700 lg:grid-cols-3">
           <RequestInfo label="Ticket types" value={request.items.map((item) => `${item.ticketType} x${item.quantity}`).join(", ")} />
@@ -3544,26 +3544,26 @@ function DispatchList({
   );
 }
 
-function RequestMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
-  const tones = {
-    neutral: "border-stone-200 bg-stone-50 text-stone-950",
-    good: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    warn: "border-amber-200 bg-amber-50 text-amber-900",
-    bad: "border-red-200 bg-red-50 text-red-900",
-  };
-  return (
-    <div className={`rounded-md border px-3 py-2 ${tones[tone]}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
 function RequestInfo({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
       <p className="mt-1 truncate font-medium text-stone-800" title={value}>{value}</p>
+    </div>
+  );
+}
+
+function CompactRequestMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
+  const tones = {
+    neutral: "border-stone-200 bg-stone-50 text-stone-900",
+    good: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    warn: "border-amber-200 bg-amber-50 text-amber-900",
+    bad: "border-red-200 bg-red-50 text-red-900",
+  };
+  return (
+    <div className={`min-h-12 rounded-md border px-2 py-1.5 ${tones[tone]}`}>
+      <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-stone-500">{label}</p>
+      <p className="text-base font-semibold leading-5 tabular-nums">{value}</p>
     </div>
   );
 }
