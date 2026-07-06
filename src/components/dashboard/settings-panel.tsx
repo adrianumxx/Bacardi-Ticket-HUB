@@ -6,8 +6,10 @@ import { UserCircle } from "@/components/ui/solar-icons";
 import type { Role, Tone } from "./types";
 import { api, inputClass, isWorkspaceManager, roleDescription, roleLabel } from "./helpers";
 import { ActionButton, Badge, Field } from "./ui-primitives";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
 
 export function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: Tone) => void; onDone: () => Promise<void> }) {
+  const { t } = useTranslation();
   const { data: session, update } = useSession();
   const role = session?.user?.role as Role | undefined;
   const [firstName, setFirstName] = useState("");
@@ -32,15 +34,21 @@ export function SettingsPanel({ notify, onDone }: { notify: (message: string, to
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!firstName.trim()) return notify("First name is required.", "bad");
+    if (!firstName.trim()) return notify(t("settings.firstNameRequired"), "bad");
     setSaving(true);
     try {
       const result = await api<{ updatedRequests?: number }>("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName, officialEmail, preferredEmailApp }) });
       await update();
       await onDone();
-      notify(`Profile updated everywhere${typeof result.updatedRequests === "number" ? ` across ${result.updatedRequests} request${result.updatedRequests === 1 ? "" : "s"}` : ""}.`);
+      notify(
+        `${t("settings.updatedEverywhere")}${
+          typeof result.updatedRequests === "number"
+            ? t("settings.updatedAcross", { count: result.updatedRequests, plural: result.updatedRequests === 1 ? "" : "s" })
+            : ""
+        }.`,
+      );
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to update your profile.", "bad");
+      notify(error instanceof Error ? error.message : t("settings.unableToUpdate"), "bad");
     } finally {
       setSaving(false);
     }
@@ -54,48 +62,46 @@ export function SettingsPanel({ notify, onDone }: { notify: (message: string, to
             <UserCircle size={22} />
           </span>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">My account</p>
-            <h2 className="text-lg font-semibold">Settings</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("settings.myAccount")}</p>
+            <h2 className="text-lg font-semibold">{t("settings.title")}</h2>
           </div>
         </div>
 
         <form onSubmit={submit} className="mt-5 grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="First name">
+            <Field label={t("settings.firstName")}>
               <input className={inputClass} value={firstName} onChange={(event) => setFirstName(event.target.value)} required />
             </Field>
-            <Field label="Last name">
+            <Field label={t("settings.lastName")}>
               <input className={inputClass} value={lastName} onChange={(event) => setLastName(event.target.value)} />
             </Field>
           </div>
-          <Field label="Email" hint="Contact a manager to change the email tied to your account.">
+          <Field label={t("settings.email")} hint={t("settings.emailHint")}>
             <input className={inputClass} value={session?.user?.email || ""} disabled />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Official sending email" hint="This is shown before opening ticket email drafts.">
+            <Field label={t("settings.officialSendingEmail")} hint={t("settings.officialSendingEmailHint")}>
               <input className={inputClass} type="email" value={officialEmail} onChange={(event) => setOfficialEmail(event.target.value)} placeholder="name@company.com" />
             </Field>
-            <Field label="Preferred email app" hint="Used when opening ticket email drafts.">
+            <Field label={t("settings.preferredEmailApp")} hint={t("settings.preferredEmailAppHint")}>
               <select className={inputClass} value={preferredEmailApp} onChange={(event) => setPreferredEmailApp(event.target.value as "default" | "outlook_web" | "gmail")}>
-                <option value="default">Default mail app</option>
-                <option value="outlook_web">Outlook web</option>
-                <option value="gmail">Gmail web</option>
+                <option value="default">{t("settings.defaultMailApp")}</option>
+                <option value="outlook_web">{t("settings.outlookWeb")}</option>
+                <option value="gmail">{t("settings.gmailWeb")}</option>
               </select>
             </Field>
           </div>
-          <Field label="Role" hint="Roles are managed by a manager in the Users section.">
+          <Field label={t("settings.role")} hint={t("settings.roleHint")}>
             <div className="grid gap-2">
               <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
               <p className="text-sm leading-6 text-stone-600">{roleDescription(role)}</p>
             </div>
           </Field>
           <div>
-            <ActionButton disabled={saving}>{saving ? "Saving..." : "Save changes"}</ActionButton>
+            <ActionButton disabled={saving}>{saving ? t("settings.saving") : t("settings.saveChanges")}</ActionButton>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-
