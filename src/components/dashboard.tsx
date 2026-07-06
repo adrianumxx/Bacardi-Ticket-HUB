@@ -127,12 +127,22 @@ type AppNotification = {
 
 type AdminUserRow = {
   email: string;
+  name?: string;
   role: Role;
   status?: "active" | "blocked";
   lastLoginAt?: string;
   accessEnabled?: boolean;
   source?: string;
   managerEmail?: string;
+};
+
+type MailHealthStatus = {
+  status: "ready" | "missing_api_key" | "invalid_sender" | "sender_not_verified" | "send_failed";
+  tone: Tone;
+  label: string;
+  message: string;
+  from: string;
+  hasApiKey: boolean;
 };
 
 type ManagerStat = {
@@ -246,6 +256,7 @@ export function LoginScreen() {
   const [mode, setMode] = useState<"signin" | "request">("signin");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [accessSubmitted, setAccessSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function submitEmail(event: FormEvent<HTMLFormElement>) {
@@ -283,10 +294,10 @@ export function LoginScreen() {
       });
       setSuccess(response.message);
       setEmail(accessEmail);
+      setAccessSubmitted(true);
       setAccessName("");
       setAccessCompany("");
       setAccessReason("");
-      setMode("signin");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to submit access request.");
     } finally {
@@ -318,6 +329,7 @@ export function LoginScreen() {
               onClick={() => {
                 setMode("signin");
                 setError("");
+                setAccessSubmitted(false);
               }}
             >
               Sign in
@@ -329,6 +341,8 @@ export function LoginScreen() {
               onClick={() => {
                 setMode("request");
                 setError("");
+                setSuccess("");
+                setAccessSubmitted(false);
               }}
             >
               Request access
@@ -341,25 +355,58 @@ export function LoginScreen() {
               </Field>
               {success && <Notice message={success} tone="good" />}
               {error && <Notice message={error} tone="bad" />}
+              {error.includes("not approved") && (
+                <ActionButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setAccessEmail(email);
+                    setError("");
+                    setSuccess("");
+                    setAccessSubmitted(false);
+                    setMode("request");
+                  }}
+                >
+                  Request access
+                </ActionButton>
+              )}
               <ActionButton disabled={submitting}>{submitting ? "Checking access..." : "Enter hub"}</ActionButton>
             </form>
           ) : (
-            <form className="grid gap-4" onSubmit={submitAccessRequest}>
-              <Field label="Full name">
-                <input className={inputClass} value={accessName} onChange={(event) => setAccessName(event.target.value)} required />
-              </Field>
-              <Field label="Work email">
-                <input className={inputClass} type="email" value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} autoComplete="email" required />
-              </Field>
-              <Field label="Company or team">
-                <input className={inputClass} value={accessCompany} onChange={(event) => setAccessCompany(event.target.value)} placeholder="Bacardi, agency, market team..." />
-              </Field>
-              <Field label="Reason for access">
-                <textarea className={inputClass} value={accessReason} onChange={(event) => setAccessReason(event.target.value)} rows={3} placeholder="Example: I manage outlets for upcoming events." />
-              </Field>
-              {error && <Notice message={error} tone="bad" />}
-              <ActionButton disabled={submitting}>{submitting ? "Submitting..." : "Submit access request"}</ActionButton>
-            </form>
+            accessSubmitted ? (
+              <div className="grid gap-4">
+                <Notice message={success || "Access request sent. A manager will review it and you will be notified by email."} tone="good" />
+                <ActionButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setAccessSubmitted(false);
+                    setSuccess("");
+                    setError("");
+                    setAccessEmail("");
+                  }}
+                >
+                  Send another request
+                </ActionButton>
+              </div>
+            ) : (
+              <form className="grid gap-4" onSubmit={submitAccessRequest}>
+                <Field label="Full name">
+                  <input className={inputClass} value={accessName} onChange={(event) => setAccessName(event.target.value)} required />
+                </Field>
+                <Field label="Work email">
+                  <input className={inputClass} type="email" value={accessEmail} onChange={(event) => setAccessEmail(event.target.value)} autoComplete="email" required />
+                </Field>
+                <Field label="Company or team">
+                  <input className={inputClass} value={accessCompany} onChange={(event) => setAccessCompany(event.target.value)} placeholder="Bacardi, agency, market team..." />
+                </Field>
+                <Field label="Reason for access">
+                  <textarea className={inputClass} value={accessReason} onChange={(event) => setAccessReason(event.target.value)} rows={3} placeholder="Example: I manage outlets for upcoming events." />
+                </Field>
+                {error && <Notice message={error} tone="bad" />}
+                <ActionButton disabled={submitting}>{submitting ? "Submitting..." : "Submit access request"}</ActionButton>
+              </form>
+            )
           )}
         </div>
       </section>
@@ -378,9 +425,10 @@ export function Dashboard() {
   const [requests, setRequests] = useState<TicketRequest[]>([]);
   const [users, setUsers] = useState<{
     allowedUsers: { email: string; role: Role; createdBy?: string; createdAt?: string }[];
-    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
+    profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   }>({ allowedUsers: [], profiles: [], accountRequests: [] });
+  const [mailStatus, setMailStatus] = useState<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -409,8 +457,12 @@ export function Dashboard() {
       setOutlets(outletData.outlets);
       setRequests(requestData.requests);
       if (role === "super_admin") {
-        const userData = await api<typeof users>("/api/admin/users");
+        const [userData, mailData] = await Promise.all([
+          api<typeof users>("/api/admin/users"),
+          api<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string }>("/api/mail/status"),
+        ]);
         setUsers(userData);
+        setMailStatus(mailData);
       }
       await loadNotifications();
     } catch (error) {
@@ -670,7 +722,7 @@ export function Dashboard() {
 
           {currentTab === "requests" && <AdminRequests requests={requests} events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "events" && <EventsPanel events={events} onDone={refresh} notify={showNotice} />}
-          {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
+          {currentTab === "users" && <UsersPanel users={users} mailStatus={mailStatus} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
@@ -1152,14 +1204,16 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
 
 function UsersPanel({
   users,
+  mailStatus,
   onDone,
   notify,
 }: {
   users: {
     allowedUsers: { email: string; role: Role; createdBy?: string; createdAt?: string }[];
-    profiles: { email: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
+    profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   };
+  mailStatus: { mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null;
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
@@ -1229,6 +1283,7 @@ function UsersPanel({
       const profile = profileMap.get(email);
       return {
         email,
+        name: profile?.name || "",
         role: (profile?.role || allowed?.role || "account_manager") as Role,
         status: profile?.status || "active",
         lastLoginAt: profile?.lastLoginAt,
@@ -1239,7 +1294,7 @@ function UsersPanel({
     })
     .sort((a, b) => a.email.localeCompare(b.email));
   const visibleRows = combinedRows.filter((row) =>
-    [row.email, row.role, row.status, row.source].join(" ").toLowerCase().includes(userSearch.toLowerCase()),
+    [row.name, row.email, row.role, row.status, row.source, row.managerEmail].join(" ").toLowerCase().includes(userSearch.toLowerCase()),
   );
 
   return (
@@ -1261,12 +1316,13 @@ function UsersPanel({
         <ActionButton disabled={submitting}>{submitting ? "Saving access..." : "Enable access"}</ActionButton>
       </form>
       <div className="space-y-5">
+        <EmailHealthCard status={mailStatus} />
         <AccessRequestQueue requests={users.accountRequests} onDone={onDone} notify={notify} />
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
           <Field label="Search users">
             <div className="relative">
               <Search className="absolute left-3 top-3 text-stone-400" size={16} />
-              <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search email, role, status, source" />
+              <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} className={`${inputClass} w-full pl-9`} placeholder="Search name, email, role, manager, status" />
             </div>
           </Field>
         </div>
@@ -1280,6 +1336,43 @@ function UsersPanel({
         />
       </div>
     </div>
+  );
+}
+
+function EmailHealthCard({ status }: { status: { mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null }) {
+  const mail = status?.mail;
+  const tone = mail?.tone || "neutral";
+  const statusCopy = mail?.label || "Checking";
+  return (
+    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Email delivery</p>
+          <h2 className="mt-1 text-lg font-semibold">Resend status</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
+            {mail?.message || "Checking the current mail configuration."}
+          </p>
+        </div>
+        <Badge tone={tone}>{statusCopy}</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <div className="rounded-md bg-stone-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">API key</p>
+          <p className="mt-1 font-medium">{mail ? (mail.hasApiKey ? "Configured" : "Missing") : "-"}</p>
+        </div>
+        <div className="rounded-md bg-stone-50 p-3 sm:col-span-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">Sender</p>
+          <p className="mt-1 break-words font-medium">{mail?.from || "-"}</p>
+        </div>
+      </div>
+      {status?.lastError && (
+        <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+          <p className="font-semibold">Last failed delivery</p>
+          <p className="mt-1 break-words">{status.lastError}</p>
+          {status.lastErrorAt && <p className="mt-1 text-xs text-red-700">{formatDate(status.lastErrorAt)}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1452,7 +1545,8 @@ function UserTable({
                 {user.email.slice(0, 2)}
               </span>
               <div className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-stone-950">{user.email}</span>
+                <span className="block truncate text-sm font-semibold text-stone-950">{user.name || user.email}</span>
+                {user.name && <span className="block truncate text-xs text-stone-500">{user.email}</span>}
                 <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-stone-400">
                   <span>{user.lastLoginAt ? formatDate(user.lastLoginAt) : "No login yet"}</span>
                   <span>&middot;</span>
@@ -1474,7 +1568,7 @@ function UserTable({
                 value={user.managerEmail || ""}
                 disabled={busyEmail === user.email || managers.length === 0}
                 onChange={(value) => void onUpdate(user.email, { managerEmail: value })}
-                options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.email }))]}
+                options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.name || manager.email }))]}
               />
             ) : (
               <span className="text-xs text-stone-300">-</span>

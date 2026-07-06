@@ -17,9 +17,83 @@ export type MailDelivery = {
   status: "sent" | "simulated" | "failed" | "skipped";
   providerId: string;
   error?: string;
+  issue?: MailIssue;
 };
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+export type MailIssue = "missing_api_key" | "invalid_sender" | "sender_not_verified" | "send_failed";
+
+export type MailHealth = {
+  status: "ready" | "missing_api_key" | "invalid_sender" | "sender_not_verified" | "send_failed";
+  tone: "good" | "warn" | "bad";
+  label: string;
+  message: string;
+  from: string;
+  hasApiKey: boolean;
+};
+
+function configuredFrom() {
+  return process.env.MAIL_FROM || "Bacardi Ticket Hub <tickets@example.com>";
+}
+
+function classifyMailError(message: string): MailIssue {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("mail_from") || normalized.includes("tickets@example.com") || normalized.includes("from")) return "invalid_sender";
+  if (normalized.includes("verify") || normalized.includes("verified") || normalized.includes("domain") || normalized.includes("sender")) return "sender_not_verified";
+  return "send_failed";
+}
+
+function issueMessage(issue: MailIssue) {
+  if (issue === "missing_api_key") return "Resend API key is missing. Emails will be simulated until RESEND_API_KEY is configured.";
+  if (issue === "invalid_sender") return "MAIL_FROM is not a valid production sender. Use a sender verified in Resend.";
+  if (issue === "sender_not_verified") return "Resend rejected the sender or domain. Verify the sender/domain in Resend, then retry.";
+  return "The last email attempt failed. Check the delivery error and Resend configuration.";
+}
+
+export function mailHealth(lastError?: string): MailHealth {
+  const from = configuredFrom();
+  const hasApiKey = Boolean(process.env.RESEND_API_KEY);
+  if (!hasApiKey) {
+    return {
+      status: "missing_api_key",
+      tone: "warn",
+      label: "Missing API key",
+      message: issueMessage("missing_api_key"),
+      from,
+      hasApiKey,
+    };
+  }
+  if (process.env.NODE_ENV === "production" && from.includes("tickets@example.com")) {
+    return {
+      status: "invalid_sender",
+      tone: "bad",
+      label: "Invalid sender",
+      message: issueMessage("invalid_sender"),
+      from,
+      hasApiKey,
+    };
+  }
+  if (lastError) {
+    const issue = classifyMailError(lastError);
+    return {
+      status: issue,
+      tone: issue === "send_failed" ? "warn" : "bad",
+      label: issue === "sender_not_verified" ? "Sender not verified" : issue === "invalid_sender" ? "Invalid sender" : "Send failed",
+      message: issueMessage(issue),
+      from,
+      hasApiKey,
+    };
+  }
+  return {
+    status: "ready",
+    tone: "good",
+    label: "Ready",
+    message: "Resend is configured. New email deliveries will be attempted from the configured sender.",
+    from,
+    hasApiKey,
+  };
+}
 
 export async function sendMail(input: SendMailInput) {
   if (!resend) {
@@ -31,7 +105,7 @@ export async function sendMail(input: SendMailInput) {
     return { status: "simulated" as const, providerId: "" };
   }
 
-  const from = process.env.MAIL_FROM || "Bacardi Ticket Hub <tickets@example.com>";
+  const from = configuredFrom();
   if (process.env.NODE_ENV === "production" && from.includes("tickets@example.com")) {
     throw new Error("MAIL_FROM must be a verified sender when RESEND_API_KEY is configured in production.");
   }
@@ -63,7 +137,7 @@ export async function deliverMail(input: SendMailInput): Promise<MailDelivery> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Email delivery failed.";
     console.error("[mail:failed]", { to: recipients, subject: input.subject, error: message });
-    return { status: "failed", providerId: "", error: message };
+    return { status: "failed", providerId: "", error: message, issue: classifyMailError(message) };
   }
 }
 
