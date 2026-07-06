@@ -5,9 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +28,7 @@ jobs:
         run: npm run check
         env:
           # Build-time placeholders; real values are provided at runtime.
+          NEXTAUTH_URL: http://localhost:3000
           NEXTAUTH_SECRET: ci-placeholder-secret-value
           MONGODB_URI: mongodb://localhost:27017/ci
           SUPER_ADMIN_EMAILS: ci@example.com
