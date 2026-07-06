@@ -5,6 +5,8 @@ import { formatShortDate } from "@/lib/utils";
 import type { ReportRow, Tone } from "./types";
 import { buildManagerSummaries, rankedTotals } from "./helpers";
 import { CountPill, EmptyState, MetricCell, TextMetric } from "./ui-primitives";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { localeMap } from "@/lib/i18n/translations";
 
 export const magnitudeRamp = ["#14b8a6", "#f59e0b", "#ef4444", "#6366f1", "#7A4A1C"];
 
@@ -79,6 +81,7 @@ export function InsightMetric({ label, value, detail, tone = "neutral" }: { labe
   );
 }
 export function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
+  const { t } = useTranslation();
   const totals = rows.reduce<{ requests: number; dispatched: number; emails: number }>(
     (acc, row) => {
       acc.requests += 1;
@@ -92,10 +95,10 @@ export function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
   const circumference = 2 * Math.PI * 42;
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold">Dispatch coverage</h3>
-      <p className="mt-0.5 text-xs text-stone-500">How many approved workflows already recorded ticket dispatches.</p>
+      <h3 className="text-sm font-semibold">{t("reports.dispatchCoverage")}</h3>
+      <p className="mt-0.5 text-xs text-stone-500">{t("reports.dispatchCoverageDetail")}</p>
       {totals.requests === 0 ? (
-        <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
+        <div className="mt-4"><EmptyState text={t("reports.noRequestsFiltered")} /></div>
       ) : (
         <div className="mt-5 grid gap-4 sm:grid-cols-[130px_1fr] sm:items-center">
           <div className="relative h-32 w-32">
@@ -118,9 +121,9 @@ export function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
             </div>
           </div>
           <div className="grid gap-2 text-sm">
-            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Requests with dispatch</span><strong>{totals.dispatched}</strong></div>
-            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Total request rows</span><strong>{totals.requests}</strong></div>
-            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Dispatch records</span><strong>{totals.emails}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>{t("reports.requestsWithDispatch")}</span><strong>{totals.dispatched}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>{t("reports.totalRequestRows")}</span><strong>{totals.requests}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>{t("reports.dispatchRecords")}</span><strong>{totals.emails}</strong></div>
           </div>
         </div>
       )}
@@ -129,14 +132,15 @@ export function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
 }
 
 export function EventPerformanceChart({ rows, onSelectEvent }: { rows: ReportRow[]; onSelectEvent?: (event: string) => void }) {
+  const { t } = useTranslation();
   const data = rankedTotals(rows, "event", "quantity", 6);
   const max = Math.max(...data.map(([, value]) => value), 1);
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold">Event demand map</h3>
-      <p className="mt-0.5 text-xs text-stone-500">Highest ticket pressure by sponsored event or festival.</p>
+      <h3 className="text-sm font-semibold">{t("reports.eventDemandMap")}</h3>
+      <p className="mt-0.5 text-xs text-stone-500">{t("reports.eventDemandDetail")}</p>
       {data.length === 0 ? (
-        <div className="mt-4"><EmptyState text="No event demand in the current filters." /></div>
+        <div className="mt-4"><EmptyState text={t("reports.noEventDemand")} /></div>
       ) : (
         <div className="mt-4 grid gap-3">
           {data.map(([label, value], index) => (
@@ -165,6 +169,8 @@ export function EventPerformanceChart({ rows, onSelectEvent }: { rows: ReportRow
 }
 
 export function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const byDay = useMemo(() => {
     const totals = new Map<string, number>();
@@ -188,16 +194,16 @@ export function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
 
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold">Tickets requested over time</h3>
-      <p className="mt-0.5 text-xs text-stone-500">Daily requested ticket volume, last {byDay.length || 0} day{byDay.length === 1 ? "" : "s"} with activity in the current filters.</p>
+      <h3 className="text-sm font-semibold">{t("reports.ticketsOverTime")}</h3>
+      <p className="mt-0.5 text-xs text-stone-500">{t("reports.ticketsOverTimeDetail", { count: byDay.length || 0, plural: byDay.length === 1 ? "" : "s" })}</p>
       {byDay.length === 0 ? (
-        <div className="mt-4"><EmptyState text="No dated requests match the current filters." /></div>
+        <div className="mt-4"><EmptyState text={t("reports.noDatedRequests")} /></div>
       ) : (
         <div className="relative mt-5">
           {hoverIndex !== null && (
             <div className="pointer-events-none absolute -top-2 left-0 -translate-y-full rounded-md border border-stone-200 bg-white px-2.5 py-1.5 text-xs shadow-lg" style={{ left: `${(hoverIndex / byDay.length) * 100}%` }}>
-              <p className="font-semibold text-stone-800">{byDay[hoverIndex][1]} ticket{byDay[hoverIndex][1] === 1 ? "" : "s"}</p>
-              <p className="text-stone-500">{formatShortDate(byDay[hoverIndex][0])}</p>
+              <p className="font-semibold text-stone-800">{t("reports.ticketCountLabel", { count: byDay[hoverIndex][1], plural: byDay[hoverIndex][1] === 1 ? "" : "s" })}</p>
+              <p className="text-stone-500">{formatShortDate(byDay[hoverIndex][0], locale)}</p>
             </div>
           )}
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-36 w-full overflow-visible rounded-md bg-stone-50">
@@ -226,8 +232,8 @@ export function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
             ))}
           </div>
           <div className="mt-1 flex justify-between text-[10px] text-stone-400">
-            <span>{formatShortDate(byDay[0][0])}</span>
-            <span>{formatShortDate(byDay[byDay.length - 1][0])}</span>
+            <span>{formatShortDate(byDay[0][0], locale)}</span>
+            <span>{formatShortDate(byDay[byDay.length - 1][0], locale)}</span>
           </div>
         </div>
       )}
@@ -236,22 +242,23 @@ export function TicketsOverTimeChart({ rows }: { rows: ReportRow[] }) {
 }
 
 export function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
+  const { t } = useTranslation();
   const totals = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of rows) {
-      const status = String(row.status || "Unknown");
+      const status = String(row.status || t("reports.unknown"));
       map.set(status, (map.get(status) ?? 0) + 1);
     }
     return [...map.entries()].filter(([, count]) => count > 0);
-  }, [rows]);
+  }, [rows, t]);
   const total = totals.reduce((sum, [, count]) => sum + count, 0);
 
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold">Requests by status</h3>
-      <p className="mt-0.5 text-xs text-stone-500">Share of the {total} request{total === 1 ? "" : "s"} matching the current filters.</p>
+      <h3 className="text-sm font-semibold">{t("reports.requestsByStatus")}</h3>
+      <p className="mt-0.5 text-xs text-stone-500">{t("reports.requestsByStatusDetail", { count: total, plural: total === 1 ? "" : "s" })}</p>
       {total === 0 ? (
-        <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
+        <div className="mt-4"><EmptyState text={t("reports.noRequestsFiltered")} /></div>
       ) : (
         <>
           <div className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-stone-100">
@@ -281,6 +288,8 @@ export function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
 
 
 export function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }: { rows: ReportRow[]; selectedManager: string | null; onSelectManager: (manager: string) => void }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const managers = useMemo(() => buildManagerSummaries(rows), [rows]);
   const maxTickets = Math.max(...managers.map((manager) => manager.tickets), 1);
 
@@ -288,23 +297,23 @@ export function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Account manager activity matrix</h3>
-          <p className="mt-0.5 text-xs text-stone-500">Who requested what, where they focused, and what still needs manager attention.</p>
+          <h3 className="text-sm font-semibold">{t("reports.managerActivityMatrix")}</h3>
+          <p className="mt-0.5 text-xs text-stone-500">{t("reports.managerActivityMatrixDetail")}</p>
         </div>
-        <CountPill label="Managers" value={managers.length} />
+        <CountPill label={t("reports.managers")} value={managers.length} />
       </div>
       {managers.length === 0 ? (
-        <div className="mt-4"><EmptyState text="No account manager activity in the current filters." /></div>
+        <div className="mt-4"><EmptyState text={t("reports.noManagerActivityFilteredShort")} /></div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-md border border-stone-200">
           <div className="hidden grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] gap-3 bg-stone-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:grid">
-            <span>Manager</span>
-            <span>Requests</span>
-            <span>Tickets</span>
-            <span>Status mix</span>
-            <span>Top outlet</span>
-            <span>Top event</span>
-            <span>Latest</span>
+            <span>{t("reports.manager")}</span>
+            <span>{t("reports.requestsMetric")}</span>
+            <span>{t("reports.ticketsMetric")}</span>
+            <span>{t("reports.statusMix")}</span>
+            <span>{t("reports.topOutlet")}</span>
+            <span>{t("reports.topEvent")}</span>
+            <span>{t("reports.latestMetric")}</span>
             <span className="text-center">Report</span>
           </div>
           <div className="divide-y divide-stone-200">
@@ -318,7 +327,7 @@ export function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }
                   type="button"
                   className={`grid w-full cursor-pointer gap-3 px-3 py-3 text-left text-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#EB6A1C]/40 xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] xl:items-center ${selectedManager === manager.key ? "bg-amber-50/60" : ""}`}
                   onClick={() => onSelectManager(manager.key)}
-                  aria-label={`View report for ${manager.manager}`}
+                  aria-label={t("reports.viewReportFor", { name: manager.manager })}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-stone-950" title={manager.manager}>{manager.manager}</p>
@@ -327,20 +336,20 @@ export function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }
                       <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${Math.max(6, (manager.tickets / maxTickets) * 100)}%` }} />
                     </div>
                   </div>
-                  <MetricCell label="Requests" value={manager.requests} />
-                  <MetricCell label="Tickets" value={manager.tickets} />
+                  <MetricCell label={t("reports.requestsMetric")} value={manager.requests} />
+                  <MetricCell label={t("reports.ticketsMetric")} value={manager.tickets} />
                   <div>
                     <div className="flex h-2 overflow-hidden rounded-full bg-stone-100">
                       <span className="bg-emerald-500" style={{ width: `${approvalRate}%` }} />
                       <span className="bg-amber-400" style={{ width: `${manager.requests ? (manager.pending / manager.requests) * 100 : 0}%` }} />
                       <span className="bg-red-500" style={{ width: `${manager.requests ? (manager.rejected / manager.requests) * 100 : 0}%` }} />
                     </div>
-                    <p className="mt-1 text-xs text-stone-500">{manager.approved} approved · {manager.pending} pending · {manager.rejected} rejected</p>
+                    <p className="mt-1 text-xs text-stone-500">{t("reports.approvedPendingRejected", { approved: manager.approved, pending: manager.pending, rejected: manager.rejected })}</p>
                   </div>
-                  <TextMetric label="Top outlet" value={topOutlet ? `${topOutlet[0]} (${topOutlet[1]})` : "No outlet"} />
-                  <TextMetric label="Top event" value={topEvent ? `${topEvent[0]} (${topEvent[1]})` : "No event"} />
-                  <TextMetric label="Latest" value={manager.latest ? formatShortDate(manager.latest) : "-"} />
-                  <span className="inline-flex min-h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 shadow-sm">View report</span>
+                  <TextMetric label={t("reports.topOutlet")} value={topOutlet ? `${topOutlet[0]} (${topOutlet[1]})` : t("reports.noOutletMetric")} />
+                  <TextMetric label={t("reports.topEvent")} value={topEvent ? `${topEvent[0]} (${topEvent[1]})` : t("reports.noEventMetric")} />
+                  <TextMetric label={t("reports.latestMetric")} value={manager.latest ? formatShortDate(manager.latest, locale) : "-"} />
+                  <span className="inline-flex min-h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 shadow-sm">{t("reports.viewReport")}</span>
                 </button>
               );
             })}
