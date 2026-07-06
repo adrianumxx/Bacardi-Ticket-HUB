@@ -176,7 +176,7 @@ type MailHealthStatus = {
   hasApiKey: boolean;
 };
 
-type EmailDeliveryStatus = "sent" | "simulated" | "failed" | "skipped" | "delivered" | "bounced" | "opened" | "clicked" | "complained" | "delivery_delayed";
+type EmailDeliveryStatus = "sent" | "manual" | "simulated" | "failed" | "skipped" | "delivered" | "bounced" | "opened" | "clicked" | "complained" | "delivery_delayed";
 
 type ManagerStat = {
   email: string;
@@ -238,7 +238,7 @@ function requestApprovedWithoutDispatch(request: TicketRequest) {
 }
 
 function dispatchTone(status: string): Tone {
-  if (status === "sent" || status === "delivered" || status === "opened" || status === "clicked") return "good";
+  if (status === "sent" || status === "manual" || status === "delivered" || status === "opened" || status === "clicked") return "good";
   if (status === "failed" || status === "bounced" || status === "complained") return "bad";
   if (status === "skipped" || status === "delivery_delayed") return "warn";
   return "neutral";
@@ -247,6 +247,7 @@ function dispatchTone(status: string): Tone {
 function dispatchLabel(status: string) {
   const labels: Record<string, string> = {
     sent: "Sent",
+    manual: "Manual",
     simulated: "Simulated",
     failed: "Failed",
     skipped: "Skipped",
@@ -268,6 +269,19 @@ function requestQuickFilterLabel(filter: RequestQuickFilter) {
     email_failed: "Email failed",
   };
   return labels[filter];
+}
+
+function buildEmailDraftUrl(app: "default" | "outlook_web" | "gmail", recipients: string[], subject: string, body: string) {
+  const to = recipients.join(",");
+  if (app === "outlook_web") {
+    const params = new URLSearchParams({ to, subject, body });
+    return `https://outlook.office.com/mail/deeplink/compose?${params.toString()}`;
+  }
+  if (app === "gmail") {
+    const params = new URLSearchParams({ view: "cm", fs: "1", to, su: subject, body });
+    return `https://mail.google.com/mail/?${params.toString()}`;
+  }
+  return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function isToday(value?: string) {
@@ -2952,7 +2966,7 @@ function FlowMap() {
     ["1", "Request", "Account manager selects event, outlet, ticket type, quantity, and recipients."],
     ["2", "Review", "Manager checks rules, edits details, and confirms the final status."],
     ["3", "Approval", "Request is approved, partially approved, or rejected with notes."],
-    ["4", "Send", "Ticket files are attached and sent by email without platform storage."],
+    ["4", "Send", "Open an email draft, attach ticket files in the official mailbox, and record the dispatch."],
   ];
 
   return (
@@ -2970,63 +2984,6 @@ function FlowMap() {
   );
 }
 
-function DropZoneFiles({ name }: { name: string }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [fileNames, setFileNames] = useState<string[]>([]);
-  const [dragOver, setDragOver] = useState(false);
-
-  function setFiles(fileList: FileList | null) {
-    if (inputRef.current) inputRef.current.files = fileList;
-    setFileNames(fileList ? Array.from(fileList).map((file) => file.name) : []);
-  }
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => inputRef.current?.click()}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          inputRef.current?.click();
-        }
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(event) => {
-        event.preventDefault();
-        setDragOver(false);
-        setFiles(event.dataTransfer.files);
-      }}
-      className={`cursor-pointer rounded-md border-2 border-dashed p-5 text-center transition ${
-        dragOver ? "border-[#EB6A1C] bg-[#ECDFC8]" : "border-stone-300 bg-stone-50 hover:border-stone-400"
-      }`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        name={name}
-        multiple
-        className="hidden"
-        onChange={(event) => setFiles(event.target.files)}
-      />
-      <Send size={20} className="mx-auto text-stone-400" />
-      <p className="mt-2 text-sm font-medium text-stone-700">Drag & drop ticket files here, or click to browse</p>
-      <p className="mt-1 text-xs text-stone-500">PDF, PNG, JPG, or ZIP - up to 15 MB total.</p>
-      {fileNames.length > 0 && (
-        <ul className="mt-3 grid gap-1 text-left text-xs text-stone-700">
-          {fileNames.map((fileName) => (
-            <li key={fileName} className="truncate rounded bg-white px-2 py-1 border border-stone-200">{fileName}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function SendTicketPanel({
   request,
   retrySeed,
@@ -3038,24 +2995,27 @@ function SendTicketPanel({
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
+  const { data: session } = useSession();
   const [showSendWindow, setShowSendWindow] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
+  const [recording, setRecording] = useState(false);
   const [draftRecipients, setDraftRecipients] = useState(request.recipientEmails.join(", "));
   const [draftSubject, setDraftSubject] = useState(`Bacardi tickets for ${request.event?.name}`);
-  const [draftMessage, setDraftMessage] = useState(`Attached are the approved ticket files for ${request.event?.name}.`);
+  const [draftMessage, setDraftMessage] = useState(`Hi,\n\nPlease find the approved ticket files attached for ${request.event?.name}.\n\nBest regards,\n${session?.user?.name || ""}`);
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
   const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
+  const preferredEmailApp = session?.user?.preferredEmailApp || "default";
+  const officialEmail = session?.user?.officialEmail || session?.user?.email || "";
   const dispatchSummary = request.dispatches.reduce(
     (summary, dispatch) => {
       summary.total += 1;
+      if (dispatch.status === "manual") summary.manual += 1;
       if (dispatch.status === "sent") summary.sent += 1;
       if (dispatch.status === "simulated") summary.simulated += 1;
       if (dispatch.status === "failed") summary.failed += 1;
       if (dispatch.status === "skipped") summary.skipped += 1;
       return summary;
     },
-    { total: 0, sent: 0, simulated: 0, failed: 0, skipped: 0 },
+    { total: 0, manual: 0, sent: 0, simulated: 0, failed: 0, skipped: 0 },
   );
 
   useEffect(() => {
@@ -3063,40 +3023,32 @@ function SendTicketPanel({
     const timer = window.setTimeout(() => {
       setDraftRecipients(retrySeed.recipients);
       setDraftSubject(`Retry: Bacardi tickets for ${request.event?.name}`);
-      setDraftMessage(`Attached are the approved ticket files for ${request.event?.name}. This retries a previous failed dispatch.`);
+      setDraftMessage(`Hi,\n\nPlease find the approved ticket files attached for ${request.event?.name}. This retries a previous dispatch.\n\nBest regards,\n${session?.user?.name || ""}`);
       setShowSendWindow(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [request.event?.name, retrySeed]);
+  }, [request.event?.name, retrySeed, session?.user?.name]);
 
-  async function sendTicket(event: FormEvent<HTMLFormElement>) {
+  async function openEmailDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSendTickets) return notify("Approve or partially approve the request before sending ticket files.", "bad");
-    const form = new FormData(event.currentTarget);
-    const recipientList = splitEmails(String(form.get("recipients") || ""));
-    const files = form.getAll("files").filter((file): file is File => file instanceof File && file.size > 0);
+    const recipientList = splitEmails(draftRecipients);
     if (recipientList.length === 0) return notify("Add at least one recipient email before sending tickets.", "bad");
-    if (files.length === 0) return notify("Attach at least one ticket file before sending.", "bad");
-    setPendingSend({ formData: form, form: event.currentTarget, recipients: recipientList, fileCount: files.length });
-  }
-
-  async function confirmSendTicket() {
-    if (!pendingSend) return;
-    setSending(true);
+    const url = buildEmailDraftUrl(preferredEmailApp, recipientList, draftSubject, draftMessage);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setRecording(true);
     try {
-      await api(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
-      pendingSend.form.reset();
-      setDraftRecipients(request.recipientEmails.join(", "));
-      setDraftSubject(`Bacardi tickets for ${request.event?.name}`);
-      setDraftMessage(`Attached are the approved ticket files for ${request.event?.name}.`);
-      setPendingSend(null);
+      await api(`/api/requests/${request._id}/manual-dispatch`, {
+        method: "POST",
+        body: JSON.stringify({ recipients: recipientList, subject: draftSubject, message: draftMessage, mailtoUrl: url }),
+      });
       setShowSendWindow(false);
-      notify("Ticket email sent or simulated. Check dispatch history for details.");
+      notify("Email draft opened. Attach the ticket files from your official mailbox, then send.");
       await onDone();
     } catch (error) {
-      notify(error instanceof Error ? `Ticket email failed: ${error.message}` : "Ticket email failed. Check email configuration and retry manually.", "bad");
+      notify(error instanceof Error ? error.message : "Unable to record the manual dispatch.", "bad");
     } finally {
-      setSending(false);
+      setRecording(false);
     }
   }
 
@@ -3108,10 +3060,11 @@ function SendTicketPanel({
           <p className="text-sm text-stone-600">
             {canSendTickets
               ? `${approvedTotal || "Approved"} ticket${approvedTotal === 1 ? "" : "s"} ready to dispatch by email.`
-              : "Approve or partially approve this request first, then send ticket files here."}
+              : "Approve or partially approve this request first, then open an email draft."}
           </p>
           {dispatchSummary.total > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
+              {dispatchSummary.manual > 0 && <Badge tone="good">{dispatchSummary.manual} manual</Badge>}
               {dispatchSummary.sent > 0 && <Badge tone="good">{dispatchSummary.sent} sent</Badge>}
               {dispatchSummary.simulated > 0 && <Badge tone="neutral">{dispatchSummary.simulated} simulated</Badge>}
               {dispatchSummary.failed > 0 && <Badge tone="bad">{dispatchSummary.failed} failed</Badge>}
@@ -3120,7 +3073,7 @@ function SendTicketPanel({
           )}
         </div>
         <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
-          <Send size={16} /> Send ticket files
+          <Mail size={16} /> Open email draft
         </ActionButton>
       </div>
 
@@ -3136,7 +3089,11 @@ function SendTicketPanel({
                 <X size={18} />
               </ActionButton>
             </div>
-            <form onSubmit={sendTicket} className="mt-4 grid gap-3">
+            <form onSubmit={openEmailDraft} className="mt-4 grid gap-3">
+              <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">
+                <p className="font-semibold">Send from your official mailbox</p>
+                <p className="mt-1">This opens your chosen email app. Attach the ticket files there, then send from {officialEmail || "your official email"}.</p>
+              </div>
               <Field label="Email recipients" hint="Send to anyone - separate multiple addresses with a comma.">
                 <input name="recipients" required value={draftRecipients} onChange={(event) => setDraftRecipients(event.target.value)} className={inputClass} />
               </Field>
@@ -3146,33 +3103,12 @@ function SendTicketPanel({
               <Field label="Message body">
                 <textarea name="message" required value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} className={inputClass} rows={4} />
               </Field>
-              <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
-                <DropZoneFiles name="files" />
-              </Field>
               <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">
-                <p className="font-semibold">Before sending</p>
-                <p className="mt-1">Recipients and attached files are emailed now. Ticket files will not be saved in the platform.</p>
+                <p className="font-semibold">Attachments</p>
+                <p className="mt-1">The browser cannot attach local files automatically. Add the ticket files inside Outlook or Gmail before sending.</p>
               </div>
-              <ActionButton disabled={!canSendTickets}><Send size={16} /> Send ticket email</ActionButton>
+              <ActionButton disabled={!canSendTickets || recording}><Mail size={16} /> {recording ? "Opening..." : "Open email draft"}</ActionButton>
             </form>
-          </div>
-        </div>
-      )}
-
-      {pendingSend && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-stone-950/40 px-4">
-          <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Confirm dispatch</p>
-            <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
-            <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-3 text-sm text-stone-700">
-              <p><strong>Files:</strong> {pendingSend.fileCount} attachment{pendingSend.fileCount === 1 ? "" : "s"}</p>
-              <p className="break-words"><strong>Recipients:</strong> {pendingSend.recipients.join(", ")}</p>
-              <p className="text-xs text-stone-500">Files are emailed now and are not stored in the platform.</p>
-            </div>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
-              <ActionButton disabled={sending} onClick={() => void confirmSendTicket()}>{sending ? "Sending..." : "Confirm send"}</ActionButton>
-            </div>
           </div>
         </div>
       )}
@@ -3481,8 +3417,8 @@ function RequestInfo({ label, value }: { label: string; value: string }) {
 function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
   const nextStep = (request: TicketRequest) => {
     if (request.status === "pending") return "Next: a manager reviews the outlet, quantities, recipients, and notes.";
-    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: you or the manager can now send ticket files by email.";
-    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: you or the manager can now send the available tickets.";
+    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: you or the manager can now open an email draft and attach ticket files.";
+    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: open an email draft and attach the available tickets.";
     return "Rejected: review the manager note before creating a corrected request.";
   };
 
@@ -3515,6 +3451,8 @@ function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: To
   const role = session?.user?.role as Role | undefined;
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [officialEmail, setOfficialEmail] = useState("");
+  const [preferredEmailApp, setPreferredEmailApp] = useState<"default" | "outlook_web" | "gmail">("default");
   const [saving, setSaving] = useState(false);
   const [loadedName, setLoadedName] = useState<string | null>(null);
 
@@ -3527,6 +3465,8 @@ function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: To
     const [first, ...rest] = sessionName.trim().split(/\s+/).filter(Boolean);
     setFirstName(first || "");
     setLastName(rest.join(" "));
+    setOfficialEmail(session?.user?.officialEmail || session?.user?.email || "");
+    setPreferredEmailApp(session?.user?.preferredEmailApp || "default");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -3534,7 +3474,7 @@ function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: To
     if (!firstName.trim()) return notify("First name is required.", "bad");
     setSaving(true);
     try {
-      const result = await api<{ updatedRequests?: number }>("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName }) });
+      const result = await api<{ updatedRequests?: number }>("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName, officialEmail, preferredEmailApp }) });
       await update();
       await onDone();
       notify(`Profile updated everywhere${typeof result.updatedRequests === "number" ? ` across ${result.updatedRequests} request${result.updatedRequests === 1 ? "" : "s"}` : ""}.`);
@@ -3570,6 +3510,18 @@ function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: To
           <Field label="Email" hint="Contact a manager to change the email tied to your account.">
             <input className={inputClass} value={session?.user?.email || ""} disabled />
           </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Official sending email" hint="This is shown before opening ticket email drafts.">
+              <input className={inputClass} type="email" value={officialEmail} onChange={(event) => setOfficialEmail(event.target.value)} placeholder="name@company.com" />
+            </Field>
+            <Field label="Preferred email app" hint="Used when opening ticket email drafts.">
+              <select className={inputClass} value={preferredEmailApp} onChange={(event) => setPreferredEmailApp(event.target.value as "default" | "outlook_web" | "gmail")}>
+                <option value="default">Default mail app</option>
+                <option value="outlook_web">Outlook web</option>
+                <option value="gmail">Gmail web</option>
+              </select>
+            </Field>
+          </div>
           <Field label="Role" hint="Roles are managed by a manager in the Users section.">
             <div className="grid gap-2">
               <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>

@@ -18,6 +18,8 @@ export async function getCurrentUser() {
     email,
     name: profile.name || session.user.name || email,
     role: profile.role,
+    officialEmail: profile.officialEmail || "",
+    preferredEmailApp: profile.preferredEmailApp || "default",
   };
 }
 

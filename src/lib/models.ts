@@ -4,7 +4,7 @@ const roles = ["super_admin", "workspace_manager", "account_manager"] as const;
 const requestStatuses = ["pending", "approved", "partially_approved", "rejected"] as const;
 const accountRequestStatuses = ["pending", "approved", "rejected"] as const;
 const notificationCategories = ["accounts", "requests", "tickets", "users", "outlets", "events", "reports", "system"] as const;
-const deliveryStatuses = ["sent", "simulated", "failed", "skipped", "delivered", "bounced", "opened", "clicked", "complained", "delivery_delayed"] as const;
+const deliveryStatuses = ["sent", "manual", "simulated", "failed", "skipped", "delivered", "bounced", "opened", "clicked", "complained", "delivery_delayed"] as const;
 
 const ProfileSchema = new Schema(
   {
@@ -14,6 +14,8 @@ const ProfileSchema = new Schema(
     status: { type: String, enum: ["active", "blocked"], default: "active" },
     lastLoginAt: { type: Date },
     managerEmail: { type: String, default: "", lowercase: true, trim: true },
+    officialEmail: { type: String, default: "", lowercase: true, trim: true },
+    preferredEmailApp: { type: String, enum: ["default", "outlook_web", "gmail"], default: "default" },
   },
   { timestamps: true },
 );
@@ -135,7 +137,7 @@ const DispatchSchema = new Schema(
     // Summary status kept for backward compatibility with existing records
     // and simple UI badges: "failed" if any recipient failed, else "sent" if
     // any succeeded, else the first delivery's status.
-    status: { type: String, enum: ["sent", "simulated", "failed"], default: "simulated" },
+    status: { type: String, enum: ["sent", "manual", "simulated", "failed"], default: "simulated" },
     providerId: { type: String, default: "" },
     deliveries: { type: [DispatchDeliverySchema], default: [] },
   },

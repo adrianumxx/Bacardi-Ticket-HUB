@@ -11,15 +11,16 @@ export async function PATCH(request: Request) {
     await connectDb();
     const input = profileUpdateSchema.parse(await request.json());
     const name = [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
+    const officialEmail = input.officialEmail || user.email;
 
     const profile = await Profile.findOneAndUpdate(
       { email: user.email },
-      { $set: { name } },
+      { $set: { name, officialEmail, preferredEmailApp: input.preferredEmailApp } },
       { new: true },
     ).lean();
     const requests = await TicketRequest.updateMany({ requestedBy: user.email }, { $set: { accountManagerName: name } });
 
-    await auditLog({ actor: user.email, action: "profile.updated", target: user.email, payload: { name, updatedRequests: requests.modifiedCount } });
+    await auditLog({ actor: user.email, action: "profile.updated", target: user.email, payload: { name, officialEmail, preferredEmailApp: input.preferredEmailApp, updatedRequests: requests.modifiedCount } });
     return json({ profile, updatedRequests: requests.modifiedCount });
   } catch (error) {
     return errorResponse(error);

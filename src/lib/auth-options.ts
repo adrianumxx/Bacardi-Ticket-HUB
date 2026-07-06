@@ -68,6 +68,8 @@ export const authOptions: NextAuthOptions = {
           token.id = String(profile._id);
           token.role = profile.role;
           token.status = profile.status;
+          token.officialEmail = profile.officialEmail || "";
+          token.preferredEmailApp = profile.preferredEmailApp || "default";
           // Keep the session's display name in sync with Settings updates:
           // ensureAllowedProfile never overwrites an existing name, so the DB
           // value here always reflects the latest save.
@@ -81,6 +83,8 @@ export const authOptions: NextAuthOptions = {
         session.user.id = String(token.id || "");
         session.user.role = token.role as "super_admin" | "workspace_manager" | "account_manager";
         session.user.status = token.status as "active" | "blocked";
+        session.user.officialEmail = String(token.officialEmail || "");
+        session.user.preferredEmailApp = token.preferredEmailApp as "default" | "outlook_web" | "gmail";
       }
       return session;
     },

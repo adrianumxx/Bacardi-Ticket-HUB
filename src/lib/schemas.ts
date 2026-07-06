@@ -11,6 +11,8 @@ export const allowedUserSchema = z.object({
 export const profileUpdateSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required.").max(60),
   lastName: z.string().trim().max(60).optional().default(""),
+  officialEmail: z.union([z.email(), z.literal("")]).optional().default(""),
+  preferredEmailApp: z.enum(["default", "outlook_web", "gmail"]).optional().default("default"),
 });
 
 export const adminUserUpdateSchema = z.object({
@@ -112,4 +114,8 @@ export const sendTicketSchema = z.object({
   recipients: z.array(z.email()).min(1),
   subject: z.string().min(2),
   message: z.string().min(2),
+});
+
+export const manualDispatchSchema = sendTicketSchema.extend({
+  mailtoUrl: z.string().max(2000).optional().default(""),
 });

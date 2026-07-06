@@ -6,6 +6,8 @@ declare module "next-auth" {
       id?: string;
       role?: "super_admin" | "workspace_manager" | "account_manager";
       status?: "active" | "blocked";
+      officialEmail?: string;
+      preferredEmailApp?: "default" | "outlook_web" | "gmail";
     } & DefaultSession["user"];
   }
 }
