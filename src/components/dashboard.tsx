@@ -190,7 +190,7 @@ type ManagerStat = {
   latestRequest?: string;
 };
 
-type RequestQuickFilter = "all" | "pending" | "approved_not_sent" | "email_failed";
+type RequestQuickFilter = "attention" | "all" | "pending" | "approved_not_sent" | "email_failed";
 
 type GlobalSearchResult = {
   id: string;
@@ -261,6 +261,7 @@ function dispatchLabel(status: string) {
 
 function requestQuickFilterLabel(filter: RequestQuickFilter) {
   const labels = {
+    attention: "Needs attention",
     all: "All requests",
     pending: "Pending requests",
     approved_not_sent: "Approved without tickets sent",
@@ -837,7 +838,7 @@ export function Dashboard() {
   const [notificationFilter, setNotificationFilter] = useState<"all" | "unread" | AppNotification["category"]>("all");
   const [notice, setNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("all");
+  const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("attention");
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
@@ -1280,7 +1281,8 @@ export function Dashboard() {
               events={events}
               outlets={outlets}
               quickFilter={requestQuickFilter}
-              onClearQuickFilter={() => setRequestQuickFilter("all")}
+              onQuickFilterChange={setRequestQuickFilter}
+              onClearQuickFilter={() => setRequestQuickFilter("attention")}
               onDone={refresh}
               notify={showNotice}
             />
@@ -2704,11 +2706,14 @@ function Step({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
+const INITIAL_VISIBLE_REQUESTS = 8;
+
 function AdminRequests({
   requests,
   events,
   outlets,
-  quickFilter = "all",
+  quickFilter = "attention",
+  onQuickFilterChange,
   onClearQuickFilter,
   onDone,
   notify,
@@ -2717,6 +2722,7 @@ function AdminRequests({
   events: EventItem[];
   outlets: Outlet[];
   quickFilter?: RequestQuickFilter;
+  onQuickFilterChange?: (filter: RequestQuickFilter) => void;
   onClearQuickFilter?: () => void;
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
@@ -2725,6 +2731,7 @@ function AdminRequests({
   const [eventFilter, setEventFilter] = useState("all");
   const [outletFilter, setOutletFilter] = useState("all");
   const [managerFilter, setManagerFilter] = useState("");
+  const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_REQUESTS });
   const managerStats = useMemo(() => {
     const stats = new Map<string, ManagerStat>();
     for (const request of requests) {
@@ -2758,7 +2765,9 @@ function AdminRequests({
     return [...stats.values()].sort((a, b) => b.requests - a.requests || b.tickets - a.tickets);
   }, [requests]);
   const filtered = requests.filter((request) => {
+    const needsAttention = request.status === "pending" || requestApprovedWithoutDispatch(request) || requestHasFailedDispatch(request);
     const matchesQuick =
+      (quickFilter === "attention" && needsAttention) ||
       quickFilter === "all" ||
       (quickFilter === "pending" && request.status === "pending") ||
       (quickFilter === "approved_not_sent" && requestApprovedWithoutDispatch(request)) ||
@@ -2770,18 +2779,37 @@ function AdminRequests({
     const matchesManager = !managerFilter || managerHaystack.includes(managerFilter.toLowerCase());
     return matchesQuick && matchesStatus && matchesEvent && matchesOutlet && matchesManager;
   });
+  const filterKey = [quickFilter, statusFilter, eventFilter, outletFilter, managerFilter.trim().toLowerCase()].join("|");
+  const visibleCount = visibleState.key === filterKey ? visibleState.count : INITIAL_VISIBLE_REQUESTS;
+  const visibleRequests = filtered.slice(0, visibleCount);
+  const hiddenCount = Math.max(filtered.length - visibleRequests.length, 0);
+  const filterChips: RequestQuickFilter[] = ["attention", "pending", "approved_not_sent", "email_failed", "all"];
 
   return (
     <div className="space-y-4">
       <ManagerAnalytics rows={managerStats} />
       <FlowMap />
-      {quickFilter !== "all" && (
+      <div className="flex flex-wrap items-center gap-2">
+        {filterChips.map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => onQuickFilterChange?.(filter)}
+            className={`glass-pill rounded-full border px-4 py-2 text-sm font-medium transition ${
+              quickFilter === filter ? "border-[#5B4228] bg-[#5B4228] text-white shadow-sm" : "border-[#ECDFC8] bg-white text-stone-700 hover:border-[#EB6A1C]"
+            }`}
+          >
+            {requestQuickFilterLabel(filter)}
+          </button>
+        ))}
+      </div>
+      {quickFilter !== "attention" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 shadow-sm">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">Today filter</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">Request filter</p>
             <p className="text-sm font-medium text-stone-900">{requestQuickFilterLabel(quickFilter)}</p>
           </div>
-          <ActionButton type="button" variant="secondary" onClick={onClearQuickFilter}>Clear filter</ActionButton>
+          <ActionButton type="button" variant="secondary" onClick={onClearQuickFilter}>Back to attention</ActionButton>
         </div>
       )}
       <div className="grid gap-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -2811,8 +2839,22 @@ function AdminRequests({
         </Field>
       </div>
 
-      {filtered.map((request) => <RequestCard key={request._id} request={request} onDone={onDone} notify={notify} />)}
-      {filtered.length === 0 && <EmptyState text="No requests match the current filters." />}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600 shadow-sm">
+        <span>
+          Showing <strong className="text-stone-950">{visibleRequests.length}</strong> of <strong className="text-stone-950">{filtered.length}</strong> matching requests.
+        </span>
+        {quickFilter === "attention" && <span className="text-xs uppercase tracking-[0.12em] text-[#EB6A1C]">Operational queue</span>}
+      </div>
+
+      {visibleRequests.map((request) => <RequestCard key={request._id} request={request} onDone={onDone} notify={notify} />)}
+      {hiddenCount > 0 && (
+        <div className="flex justify-center">
+          <ActionButton type="button" variant="secondary" onClick={() => setVisibleState({ key: filterKey, count: visibleCount + INITIAL_VISIBLE_REQUESTS })}>
+            Show {Math.min(INITIAL_VISIBLE_REQUESTS, hiddenCount)} more
+          </ActionButton>
+        </div>
+      )}
+      {filtered.length === 0 && <EmptyState text={quickFilter === "attention" ? "No requests need attention right now." : "No requests match the current filters."} />}
     </div>
   );
 }
