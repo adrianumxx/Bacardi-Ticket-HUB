@@ -179,6 +179,11 @@ type GlobalSearchResult = {
   quickFilter?: RequestQuickFilter;
 };
 
+type DispatchRetrySeed = {
+  recipients: string;
+  token: number;
+};
+
 const inputClass =
   "min-h-11 rounded-none border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 shadow-sm transition focus:border-[#EB6A1C] disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500";
 
@@ -206,6 +211,23 @@ function requestHasFailedDispatch(request: TicketRequest) {
 
 function requestApprovedWithoutDispatch(request: TicketRequest) {
   return (request.status === "approved" || request.status === "partially_approved") && request.dispatches.length === 0;
+}
+
+function dispatchTone(status: string): Tone {
+  if (status === "sent") return "good";
+  if (status === "failed") return "bad";
+  if (status === "skipped") return "warn";
+  return "neutral";
+}
+
+function dispatchLabel(status: string) {
+  const labels: Record<string, string> = {
+    sent: "Sent",
+    simulated: "Simulated",
+    failed: "Failed",
+    skipped: "Skipped",
+  };
+  return labels[status] ?? status;
 }
 
 function requestQuickFilterLabel(filter: RequestQuickFilter) {
@@ -2917,13 +2939,47 @@ function DropZoneFiles({ name }: { name: string }) {
   );
 }
 
-function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+function SendTicketPanel({
+  request,
+  retrySeed,
+  onDone,
+  notify,
+}: {
+  request: TicketRequest;
+  retrySeed?: DispatchRetrySeed | null;
+  onDone: () => Promise<void>;
+  notify: (message: string, tone?: Tone) => void;
+}) {
   const [showSendWindow, setShowSendWindow] = useState(false);
   const [sending, setSending] = useState(false);
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
+  const [draftRecipients, setDraftRecipients] = useState(request.recipientEmails.join(", "));
+  const [draftSubject, setDraftSubject] = useState(`Bacardi tickets for ${request.event?.name}`);
+  const [draftMessage, setDraftMessage] = useState(`Attached are the approved ticket files for ${request.event?.name}.`);
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
-  const defaultMessage = `Attached are the approved ticket files for ${request.event?.name}.`;
   const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
+  const dispatchSummary = request.dispatches.reduce(
+    (summary, dispatch) => {
+      summary.total += 1;
+      if (dispatch.status === "sent") summary.sent += 1;
+      if (dispatch.status === "simulated") summary.simulated += 1;
+      if (dispatch.status === "failed") summary.failed += 1;
+      if (dispatch.status === "skipped") summary.skipped += 1;
+      return summary;
+    },
+    { total: 0, sent: 0, simulated: 0, failed: 0, skipped: 0 },
+  );
+
+  useEffect(() => {
+    if (!retrySeed) return;
+    const timer = window.setTimeout(() => {
+      setDraftRecipients(retrySeed.recipients);
+      setDraftSubject(`Retry: Bacardi tickets for ${request.event?.name}`);
+      setDraftMessage(`Attached are the approved ticket files for ${request.event?.name}. This retries a previous failed dispatch.`);
+      setShowSendWindow(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [request.event?.name, retrySeed]);
 
   async function sendTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2942,12 +2998,15 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
     try {
       await api(`/api/requests/${request._id}/send-ticket`, { method: "POST", body: pendingSend.formData });
       pendingSend.form.reset();
+      setDraftRecipients(request.recipientEmails.join(", "));
+      setDraftSubject(`Bacardi tickets for ${request.event?.name}`);
+      setDraftMessage(`Attached are the approved ticket files for ${request.event?.name}.`);
       setPendingSend(null);
       setShowSendWindow(false);
       notify("Ticket email sent or simulated. Check dispatch history for details.");
       await onDone();
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to send the ticket email.", "bad");
+      notify(error instanceof Error ? `Ticket email failed: ${error.message}` : "Ticket email failed. Check email configuration and retry manually.", "bad");
     } finally {
       setSending(false);
     }
@@ -2963,6 +3022,14 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
               ? `${approvedTotal || "Approved"} ticket${approvedTotal === 1 ? "" : "s"} ready to dispatch by email.`
               : "Approve or partially approve this request first, then send ticket files here."}
           </p>
+          {dispatchSummary.total > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {dispatchSummary.sent > 0 && <Badge tone="good">{dispatchSummary.sent} sent</Badge>}
+              {dispatchSummary.simulated > 0 && <Badge tone="neutral">{dispatchSummary.simulated} simulated</Badge>}
+              {dispatchSummary.failed > 0 && <Badge tone="bad">{dispatchSummary.failed} failed</Badge>}
+              {dispatchSummary.skipped > 0 && <Badge tone="warn">{dispatchSummary.skipped} skipped</Badge>}
+            </div>
+          )}
         </div>
         <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
           <Send size={16} /> Send ticket files
@@ -2983,17 +3050,21 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
             </div>
             <form onSubmit={sendTicket} className="mt-4 grid gap-3">
               <Field label="Email recipients" hint="Send to anyone - separate multiple addresses with a comma.">
-                <input name="recipients" required defaultValue={request.recipientEmails.join(", ")} className={inputClass} />
+                <input name="recipients" required value={draftRecipients} onChange={(event) => setDraftRecipients(event.target.value)} className={inputClass} />
               </Field>
               <Field label="Subject">
-                <input name="subject" required defaultValue={`Bacardi tickets for ${request.event?.name}`} className={inputClass} />
+                <input name="subject" required value={draftSubject} onChange={(event) => setDraftSubject(event.target.value)} className={inputClass} />
               </Field>
               <Field label="Message body">
-                <textarea name="message" required defaultValue={defaultMessage} className={inputClass} rows={4} />
+                <textarea name="message" required value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} className={inputClass} rows={4} />
               </Field>
               <Field label="Ticket attachments" hint="Files are emailed now and are not stored as ticket inventory.">
                 <DropZoneFiles name="files" />
               </Field>
+              <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">
+                <p className="font-semibold">Before sending</p>
+                <p className="mt-1">Recipients and attached files are emailed now. Ticket files will not be saved in the platform.</p>
+              </div>
               <ActionButton disabled={!canSendTickets}><Send size={16} /> Send ticket email</ActionButton>
             </form>
           </div>
@@ -3027,6 +3098,7 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
   const [recipients, setRecipients] = useState(request.recipientEmails.join(", "));
   const [updating, setUpdating] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [retrySeed, setRetrySeed] = useState<DispatchRetrySeed | null>(null);
   const [approvedByIndex, setApprovedByIndex] = useState<Record<number, number>>(() =>
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
@@ -3223,11 +3295,14 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
           <ActionButton variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
         </div>
 
-        <SendTicketPanel request={request} onDone={onDone} notify={notify} />
+        <SendTicketPanel request={request} retrySeed={retrySeed} onDone={onDone} notify={notify} />
 
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <HistoryList history={request.history} />
-          <DispatchList dispatches={request.dispatches} />
+          <DispatchList
+            dispatches={request.dispatches}
+            onRetry={(dispatch) => setRetrySeed({ recipients: dispatch.recipients.join(", "), token: Date.now() })}
+          />
         </div>
       </div>
     </details>
@@ -3252,21 +3327,37 @@ function HistoryList({ history }: { history: TicketRequest["history"] }) {
   );
 }
 
-function DispatchList({ dispatches }: { dispatches: TicketRequest["dispatches"] }) {
+function DispatchList({
+  dispatches,
+  onRetry,
+}: {
+  dispatches: TicketRequest["dispatches"];
+  onRetry?: (dispatch: TicketRequest["dispatches"][number]) => void;
+}) {
   return (
     <section className="rounded-md border border-stone-200 p-3">
       <h4 className="text-sm font-semibold">Ticket dispatches</h4>
       <div className="mt-3 space-y-3">
         {dispatches.map((dispatch, index) => (
-          <div key={`${dispatch.at}-${index}`} className="rounded-md border border-stone-100 bg-stone-50 p-3 text-sm">
+          <div key={`${dispatch.at}-${index}`} className={`rounded-md border p-3 text-sm ${dispatch.status === "failed" ? "border-red-200 bg-red-50" : "border-stone-100 bg-stone-50"}`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <p className="break-words font-medium">
                 <Mail className="mr-1 inline" size={14} /> {dispatch.recipients.join(", ")}
               </p>
-              <Badge tone={dispatch.status === "sent" ? "good" : dispatch.status === "failed" ? "bad" : "warn"}>{dispatch.status}</Badge>
+              <Badge tone={dispatchTone(dispatch.status)}>{dispatchLabel(dispatch.status)}</Badge>
             </div>
             <p className="mt-1 text-stone-600">{dispatch.fileNames.join(", ") || "No file names recorded"}</p>
             <p className="mt-1 text-xs text-stone-500">{formatDate(dispatch.at)}</p>
+            {dispatch.status === "failed" && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-white/70 p-2">
+                <p className="text-xs text-red-800">This email did not reach the recipients. Attach the files again and retry manually.</p>
+                {onRetry && (
+                  <ActionButton type="button" variant="secondary" className="min-h-8 px-2" onClick={() => onRetry(dispatch)}>
+                    <RefreshCcw size={14} /> Retry
+                  </ActionButton>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {dispatches.length === 0 && <p className="text-sm text-stone-500">No ticket emails have been sent.</p>}
