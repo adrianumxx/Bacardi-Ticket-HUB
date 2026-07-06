@@ -124,7 +124,7 @@ export type RequestQuickFilter = "attention" | "all" | "pending" | "approved_not
 
 export type GlobalSearchResult = {
   id: string;
-  group: "Requests" | "Events" | "Outlets" | "Account managers" | "Users" | "Notifications";
+  group: string;
   title: string;
   detail: string;
   tab: string;

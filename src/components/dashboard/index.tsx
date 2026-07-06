@@ -36,9 +36,12 @@ import { AuditPanel } from "./audit-panel";
 import { AdminRequests, MinePanel, NewRequestPanel } from "./requests-panel";
 import { ReportsPanel } from "./reports-panel";
 import { SettingsPanel } from "./settings-panel";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { LanguageSwitcher } from "@/lib/i18n/LanguageSwitcher";
 export { LoginScreen } from "./login-screen";
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const { data: session, status } = useSession();
   const role = session?.user?.role as Role | undefined;
   const [tab, setTab] = useState("today");
@@ -143,33 +146,33 @@ export function Dashboard() {
         ? []
         : isSuperAdmin(role)
         ? [
-            ["today", "Today", BarChart3],
-            ["requests", "Requests", Ticket],
-            ["events", "Events & festivals", CalendarDays],
-            ["users", "Users", Users],
-            ["reports", "Reports", BarChart3],
-            ["audit", "Audit", Clock],
-            ["settings", "Settings", Settings],
+            ["today", t("nav.today"), BarChart3],
+            ["requests", t("nav.requests"), Ticket],
+            ["events", t("nav.eventsFestivals"), CalendarDays],
+            ["users", t("nav.users"), Users],
+            ["reports", t("nav.reports"), BarChart3],
+            ["audit", t("nav.audit"), Clock],
+            ["settings", t("nav.settings"), Settings],
           ]
         : isWorkspaceManager(role)
         ? [
-            ["today", "Today", BarChart3],
-            ["requests", "Requests", Ticket],
-            ["events", "Events & festivals", CalendarDays],
-            ["reports", "Reports", BarChart3],
-            ["settings", "Settings", Settings],
+            ["today", t("nav.today"), BarChart3],
+            ["requests", t("nav.requests"), Ticket],
+            ["events", t("nav.eventsFestivals"), CalendarDays],
+            ["reports", t("nav.reports"), BarChart3],
+            ["settings", t("nav.settings"), Settings],
           ]
         : [
-            ["new-request", "New request", Plus],
-            ["mine", "My requests", Ticket],
-            ["settings", "Settings", Settings],
+            ["new-request", t("nav.newRequest"), Plus],
+            ["mine", t("nav.mine"), Ticket],
+            ["settings", t("nav.settings"), Settings],
           ],
-    [role],
+    [role, t],
   );
 
   const currentTab = (tabs.some(([id]) => id === tab) ? tab : tabs[0]?.[0] ?? "requests") as string;
   const activeTab = tabs.find(([id]) => id === currentTab);
-  const activeLabel = (activeTab?.[1] as string | undefined) ?? "Dashboard";
+  const activeLabel = (activeTab?.[1] as string | undefined) ?? t("nav.dashboard");
   const showWorkspaceKpis = currentTab === "requests" || currentTab === "reports";
   const globalSearchResults = useMemo(() => {
     const query = globalSearchQuery.trim().toLowerCase();
@@ -193,12 +196,12 @@ export function Dashboard() {
     const results: GlobalSearchResult[] = [];
 
     for (const request of requests) {
-      if (matches(request.event?.name, request.outlet?.name, request.accountManagerName, request.requestedBy, renderRequestStatus(request.status), request._id)) {
+      if (matches(request.event?.name, request.outlet?.name, request.accountManagerName, request.requestedBy, renderRequestStatus(request.status, t), request._id)) {
         results.push({
           id: `request-${request._id}`,
-          group: "Requests",
+          group: t("search.groupRequests"),
           title: `${request.event?.name || "Request"} · ${request.outlet?.name || "Outlet"}`,
-          detail: `${renderRequestStatus(request.status)} · ${request.accountManagerName || request.requestedBy} · ${requestTicketTotal(request)} ticket(s)`,
+          detail: `${renderRequestStatus(request.status, t)} · ${request.accountManagerName || request.requestedBy} · ${requestTicketTotal(request)} ticket(s)`,
           tab: isWorkspaceManager(role) ? "requests" : "mine",
           quickFilter: request.status === "pending" ? "pending" : requestHasFailedDispatch(request) ? "email_failed" : requestApprovedWithoutDispatch(request) ? "approved_not_sent" : "all",
         });
@@ -209,9 +212,9 @@ export function Dashboard() {
       if (matches(event.name, event.eventKind, event.status, event.city, event.venue, event.ticketTypes.map((item) => item.name).join(" "))) {
         results.push({
           id: `event-${event._id}`,
-          group: "Events",
+          group: t("search.groupEvents"),
           title: event.name,
-          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} - ${renderEventStatus(event.status)}${event.city ? ` - ${event.city}` : ""}`,
+          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} - ${renderEventStatus(event.status, t)}${event.city ? ` - ${event.city}` : ""}`,
           tab: isWorkspaceManager(role) ? "events" : "new-request",
           eventId: event._id,
         });
@@ -222,7 +225,7 @@ export function Dashboard() {
       if (matches(outlet.name, outlet.type, outlet.city, outlet.status)) {
         results.push({
           id: `outlet-${outlet._id}`,
-          group: "Outlets",
+          group: t("search.groupOutlets"),
           title: outlet.name,
           detail: `${outlet.type}${outlet.city ? ` · ${outlet.city}` : ""} · ${outlet.status}`,
           tab: isWorkspaceManager(role) ? "events" : "new-request",
@@ -234,7 +237,7 @@ export function Dashboard() {
       if (matches(manager.name, manager.email)) {
         results.push({
           id: `manager-${manager.email}`,
-          group: "Account managers",
+          group: t("search.groupAccountManagers"),
           title: manager.name,
           detail: `${manager.email} · ${manager.requests} request(s) · ${manager.tickets} ticket(s)`,
           tab: "reports",
@@ -246,7 +249,7 @@ export function Dashboard() {
       if (matches(user.name, user.email, user.role, user.status, user.managerEmail)) {
         results.push({
           id: `user-${user.email}-${user.role}`,
-          group: "Users",
+          group: t("search.groupUsers"),
           title: user.name || user.email,
           detail: `${user.email} · ${roleLabel(user.role)}`,
           tab: "users",
@@ -258,7 +261,7 @@ export function Dashboard() {
       if (matches(user.email, user.role, user.createdBy)) {
         results.push({
           id: `allowed-${user.email}-${user.role}`,
-          group: "Users",
+          group: t("search.groupUsers"),
           title: user.email,
           detail: `${roleLabel(user.role)} · approved access`,
           tab: "users",
@@ -270,7 +273,7 @@ export function Dashboard() {
       if (matches(notification.title, notification.message, notification.actor, notification.category, notification.emailStatus)) {
         results.push({
           id: `notification-${notification._id}`,
-          group: "Notifications",
+          group: t("search.groupNotifications"),
           title: notification.title,
           detail: `${notification.category} · ${notification.emailStatus} · ${formatShortDate(notification.createdAt)}`,
           tab: notification.category === "accounts" || notification.category === "users" ? (isSuperAdmin(role) ? "users" : isWorkspaceManager(role) ? "requests" : "mine") : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine",
@@ -279,7 +282,7 @@ export function Dashboard() {
     }
 
     return results.slice(0, 24);
-  }, [events, globalSearchQuery, notifications, outlets, requests, role, users.allowedUsers, users.profiles]);
+  }, [events, globalSearchQuery, notifications, outlets, requests, role, t, users.allowedUsers, users.profiles]);
 
   function openTab(id: string) {
     setTab(id);
@@ -316,14 +319,14 @@ export function Dashboard() {
               variant="secondary"
               className="h-9 w-9 min-h-0 px-0 lg:hidden"
               onClick={() => setMobileNavOpen(true)}
-              aria-label="Open navigation"
+              aria-label={t("nav.openNavigation")}
               aria-expanded={mobileNavOpen}
             >
               <Menu size={22} />
             </ActionButton>
             <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={44} height={44} className="h-11 w-11 shrink-0 object-contain" priority unoptimized />
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#EB6A1C]">Bacardi Ticket Hub</p>
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-[#EB6A1C]">{t("login.title")}</p>
               <h1 className="truncate text-lg font-semibold sm:text-xl">{activeLabel}</h1>
             </div>
           </div>
@@ -340,12 +343,13 @@ export function Dashboard() {
             onSelect={openGlobalSearchResult}
           />
           <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher className="hidden sm:flex" />
             <ActionButton
               type="button"
               variant="secondary"
               className="hidden h-9 w-9 min-h-0 px-0 lg:inline-flex"
               onClick={() => setSidebarCollapsed((current) => !current)}
-              title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+              title={sidebarCollapsed ? t("nav.expandNavigation") : t("nav.collapseNavigation")}
             >
               {sidebarCollapsed ? <PanelLeftOpen size={22} /> : <PanelLeftClose size={22} />}
             </ActionButton>
@@ -353,7 +357,7 @@ export function Dashboard() {
               <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
-            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => void refresh()} title={t("common.refresh")}>
               <RefreshCcw size={22} className={loading ? "animate-spin" : ""} />
             </ActionButton>
             <ActionButton
@@ -361,7 +365,7 @@ export function Dashboard() {
               variant="secondary"
               className="relative h-9 w-9 min-h-0 px-0"
               onClick={() => setNotificationsOpen(true)}
-              title="Notifications"
+              title={t("notifications.title")}
             >
               <Bell size={22} />
               {unreadCount > 0 && (
@@ -370,14 +374,14 @@ export function Dashboard() {
                 </span>
               )}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => signOut()} title="Sign out">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => signOut()} title={t("nav.signOut")}>
               <LogOut size={22} />
             </ActionButton>
           </div>
         </div>
       </header>
 
-      {mobileNavOpen && <button className="fixed inset-0 z-40 bg-stone-950/35 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation overlay" />}
+      {mobileNavOpen && <button className="fixed inset-0 z-40 bg-stone-950/35 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label={t("nav.closeNavigationOverlay")} />}
       {notificationsOpen && (
         <NotificationDrawer
           notifications={notifications}
@@ -428,12 +432,12 @@ export function Dashboard() {
                   <p className="truncate text-sm font-semibold">Ticket Hub</p>
                 </div>
               </div>
-              <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
+              <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0 lg:hidden" onClick={() => setMobileNavOpen(false)} aria-label={t("nav.closeNavigation")}>
                 <X size={18} />
               </ActionButton>
             </div>
 
-            <nav className="flex-1 space-y-1 overflow-y-auto p-3 lg:pt-4" aria-label="Dashboard sections">
+            <nav className="flex-1 space-y-1 overflow-y-auto p-3 lg:pt-4" aria-label={t("nav.dashboardSections")}>
               {tabs.map(([id, label, Icon]) => (
                 <ActionButton
                   key={id as string}
@@ -480,11 +484,11 @@ export function Dashboard() {
           </div>
           {showWorkspaceKpis && (
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-              <Kpi label="Total Requests" value={kpis.total} icon={Ticket} tone="gold" />
-              <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
-              <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
-              <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
-              <Kpi label="Ticket Dispatches" value={kpis.sent} icon={Send} tone="neutral" />
+              <Kpi label={t("kpi.totalRequests")} value={kpis.total} icon={Ticket} tone="gold" />
+              <Kpi label={t("kpi.pending")} value={kpis.pending} icon={Clock} tone="warn" />
+              <Kpi label={t("kpi.approved")} value={kpis.approved} icon={CheckCircle2} tone="good" />
+              <Kpi label={t("kpi.rejected")} value={kpis.rejected} icon={XCircle} tone="bad" />
+              <Kpi label={t("kpi.ticketDispatches")} value={kpis.sent} icon={Send} tone="neutral" />
             </div>
           )}
 

@@ -20,9 +20,9 @@ export function splitEmails(value: string) {
     .filter(Boolean);
 }
 
-export function formatDate(value?: string | Date | null) {
+export function formatDate(value?: string | Date | null, locale: string = "en-GB") {
   if (!value) return "TBD";
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -37,9 +37,9 @@ export function endOfDay(value: string) {
   return date;
 }
 
-export function formatShortDate(value?: string | Date | null) {
+export function formatShortDate(value?: string | Date | null, locale: string = "en-GB") {
   if (!value) return "TBD";
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
   }).format(new Date(value));
 }

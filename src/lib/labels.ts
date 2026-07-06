@@ -2,23 +2,20 @@ export type RequestStatus = "pending" | "approved" | "partially_approved" | "rej
 export type EventStatus = "draft" | "published" | "closed";
 export type OutletStatus = "approved" | "pending" | "archived";
 
-export const requestStatusLabels: Record<RequestStatus, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  partially_approved: "Partially approved",
-  rejected: "Rejected",
-};
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
-export const eventStatusLabels: Record<EventStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-  closed: "Closed",
-};
+const identityT: TranslateFn = (key) => defaultLabels[key] ?? key;
 
-export const outletStatusLabels: Record<OutletStatus, string> = {
-  approved: "Approved",
-  pending: "Pending review",
-  archived: "Archived",
+const defaultLabels: Record<string, string> = {
+  "status.pending": "Pending",
+  "status.approved": "Approved",
+  "status.partially_approved": "Partially approved",
+  "status.rejected": "Rejected",
+  "status.draft": "Draft",
+  "status.published": "Published",
+  "status.closed": "Closed",
+  "status.pendingReview": "Pending review",
+  "status.archived": "Archived",
 };
 
 export const requestActionLabels: Record<string, string> = {
@@ -35,16 +32,23 @@ export const requestActionLabels: Record<string, string> = {
   ticket_email_failed: "Ticket email failed",
 };
 
-export function renderRequestStatus(status: string) {
-  return requestStatusLabels[status as RequestStatus] ?? status.replaceAll("_", " ");
+export function renderRequestStatus(status: string, t: TranslateFn = identityT) {
+  const key = `status.${status}`;
+  const label = t(key);
+  return label === key ? status.replaceAll("_", " ") : label;
 }
 
-export function renderEventStatus(status: string) {
-  return eventStatusLabels[status as EventStatus] ?? status;
+export function renderEventStatus(status: string, t: TranslateFn = identityT) {
+  const key = `status.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
 }
 
-export function renderOutletStatus(status: string) {
-  return outletStatusLabels[status as OutletStatus] ?? status;
+export function renderOutletStatus(status: string, t: TranslateFn = identityT) {
+  if (status === "pending") return t("status.pendingReview");
+  const key = `status.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
 }
 
 export function renderHistoryAction(action: string) {
