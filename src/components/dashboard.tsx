@@ -170,6 +170,15 @@ type ManagerStat = {
 
 type RequestQuickFilter = "all" | "pending" | "approved_not_sent" | "email_failed";
 
+type GlobalSearchResult = {
+  id: string;
+  group: "Requests" | "Events" | "Outlets" | "Account managers" | "Users" | "Notifications";
+  title: string;
+  detail: string;
+  tab: string;
+  quickFilter?: RequestQuickFilter;
+};
+
 const inputClass =
   "min-h-11 rounded-none border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 shadow-sm transition focus:border-[#EB6A1C] disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500";
 
@@ -514,6 +523,83 @@ function TodayActionCard({
   );
 }
 
+function GlobalSearch({
+  query,
+  results,
+  open,
+  onQueryChange,
+  onFocus,
+  onClose,
+  onSelect,
+}: {
+  query: string;
+  results: GlobalSearchResult[];
+  open: boolean;
+  onQueryChange: (value: string) => void;
+  onFocus: () => void;
+  onClose: () => void;
+  onSelect: (result: GlobalSearchResult) => void;
+}) {
+  const grouped = results.reduce((groups, result) => {
+    const group = groups.get(result.group) ?? [];
+    group.push(result);
+    groups.set(result.group, group);
+    return groups;
+  }, new Map<GlobalSearchResult["group"], GlobalSearchResult[]>());
+
+  return (
+    <div className="relative hidden min-w-[260px] flex-1 md:block xl:max-w-2xl">
+      <label className="relative block">
+        <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+        <input
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onFocus={onFocus}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onClose();
+          }}
+          className="h-10 w-full rounded-full border border-stone-200 bg-white/80 pl-10 pr-10 text-sm text-stone-950 shadow-sm outline-none transition focus:border-[#EB6A1C]"
+          placeholder="Search requests, events, outlets, users..."
+        />
+        {query && (
+          <button type="button" onClick={() => onQueryChange("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700" aria-label="Clear search">
+            <X size={16} />
+          </button>
+        )}
+      </label>
+      {open && query.trim().length >= 2 && (
+        <div className="absolute left-0 right-0 top-12 z-[70] overflow-hidden rounded-md border border-stone-200 bg-white shadow-2xl">
+          <div className="max-h-[70vh] overflow-y-auto p-2">
+            {grouped.size > 0 ? (
+              [...grouped.entries()].map(([group, groupResults]) => (
+                <section key={group} className="py-1">
+                  <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{group}</p>
+                  <div className="space-y-1">
+                    {groupResults.map((result) => (
+                      <button
+                        key={result.id}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => onSelect(result)}
+                        className="grid w-full gap-1 rounded-md px-3 py-2 text-left transition hover:bg-[#FFFCF6]"
+                      >
+                        <span className="truncate text-sm font-semibold text-stone-950">{result.title}</span>
+                        <span className="truncate text-xs text-stone-500">{result.detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))
+            ) : (
+              <div className="px-3 py-6 text-center text-sm text-stone-500">No results found.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LoginScreen() {
   const [email, setEmail] = useState("");
   const [accessEmail, setAccessEmail] = useState("");
@@ -703,6 +789,8 @@ export function Dashboard() {
   const [notice, setNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [loading, setLoading] = useState(false);
   const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("all");
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
   const loadNotifications = useCallback(async () => {
     const params = new URLSearchParams();
@@ -808,10 +896,125 @@ export function Dashboard() {
   const activeTab = tabs.find(([id]) => id === currentTab);
   const activeLabel = (activeTab?.[1] as string | undefined) ?? "Dashboard";
   const showWorkspaceKpis = currentTab === "requests" || currentTab === "reports";
+  const globalSearchResults = useMemo(() => {
+    const query = globalSearchQuery.trim().toLowerCase();
+    if (query.length < 2) return [];
+
+    const matches = (...values: (string | number | undefined | null)[]) =>
+      values
+        .filter((value) => value !== undefined && value !== null)
+        .map((value) => String(value).toLowerCase())
+        .some((value) => value.includes(query));
+
+    const managerRows = new Map<string, { name: string; email: string; requests: number; tickets: number }>();
+    for (const request of requests) {
+      const email = request.requestedBy || "Unknown";
+      const row = managerRows.get(email) ?? { name: request.accountManagerName || email, email, requests: 0, tickets: 0 };
+      row.requests += 1;
+      row.tickets += requestTicketTotal(request);
+      managerRows.set(email, row);
+    }
+
+    const results: GlobalSearchResult[] = [];
+
+    for (const request of requests) {
+      if (matches(request.event?.name, request.outlet?.name, request.accountManagerName, request.requestedBy, renderRequestStatus(request.status), request._id)) {
+        results.push({
+          id: `request-${request._id}`,
+          group: "Requests",
+          title: `${request.event?.name || "Request"} · ${request.outlet?.name || "Outlet"}`,
+          detail: `${renderRequestStatus(request.status)} · ${request.accountManagerName || request.requestedBy} · ${requestTicketTotal(request)} ticket(s)`,
+          tab: role === "super_admin" ? "requests" : "mine",
+          quickFilter: request.status === "pending" ? "pending" : requestHasFailedDispatch(request) ? "email_failed" : requestApprovedWithoutDispatch(request) ? "approved_not_sent" : "all",
+        });
+      }
+    }
+
+    for (const event of events) {
+      if (matches(event.name, event.eventKind, event.status, event.city, event.venue, event.ticketTypes.map((item) => item.name).join(" "))) {
+        results.push({
+          id: `event-${event._id}`,
+          group: "Events",
+          title: event.name,
+          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} · ${renderEventStatus(event.status)}${event.city ? ` · ${event.city}` : ""}`,
+          tab: role === "super_admin" ? "events" : "new-request",
+        });
+      }
+    }
+
+    for (const outlet of outlets) {
+      if (matches(outlet.name, outlet.type, outlet.city, outlet.status)) {
+        results.push({
+          id: `outlet-${outlet._id}`,
+          group: "Outlets",
+          title: outlet.name,
+          detail: `${outlet.type}${outlet.city ? ` · ${outlet.city}` : ""} · ${outlet.status}`,
+          tab: role === "super_admin" ? "events" : "new-request",
+        });
+      }
+    }
+
+    for (const manager of managerRows.values()) {
+      if (matches(manager.name, manager.email)) {
+        results.push({
+          id: `manager-${manager.email}`,
+          group: "Account managers",
+          title: manager.name,
+          detail: `${manager.email} · ${manager.requests} request(s) · ${manager.tickets} ticket(s)`,
+          tab: "reports",
+        });
+      }
+    }
+
+    for (const user of users.profiles) {
+      if (matches(user.name, user.email, user.role, user.status, user.managerEmail)) {
+        results.push({
+          id: `user-${user.email}-${user.role}`,
+          group: "Users",
+          title: user.name || user.email,
+          detail: `${user.email} · ${user.role === "super_admin" ? "Manager" : "Account manager"}`,
+          tab: "users",
+        });
+      }
+    }
+
+    for (const user of users.allowedUsers) {
+      if (matches(user.email, user.role, user.createdBy)) {
+        results.push({
+          id: `allowed-${user.email}-${user.role}`,
+          group: "Users",
+          title: user.email,
+          detail: `${user.role === "super_admin" ? "Manager" : "Account manager"} · approved access`,
+          tab: "users",
+        });
+      }
+    }
+
+    for (const notification of notifications) {
+      if (matches(notification.title, notification.message, notification.actor, notification.category, notification.emailStatus)) {
+        results.push({
+          id: `notification-${notification._id}`,
+          group: "Notifications",
+          title: notification.title,
+          detail: `${notification.category} · ${notification.emailStatus} · ${formatShortDate(notification.createdAt)}`,
+          tab: notification.category === "accounts" || notification.category === "users" ? "users" : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : role === "super_admin" ? "requests" : "mine",
+        });
+      }
+    }
+
+    return results.slice(0, 24);
+  }, [events, globalSearchQuery, notifications, outlets, requests, role, users.allowedUsers, users.profiles]);
 
   function openTab(id: string) {
     setTab(id);
     setMobileNavOpen(false);
+  }
+
+  function openGlobalSearchResult(result: GlobalSearchResult) {
+    if (result.quickFilter) setRequestQuickFilter(result.quickFilter);
+    openTab(result.tab);
+    setGlobalSearchOpen(false);
+    setGlobalSearchQuery("");
   }
 
   if (status === "loading" || !role) {
@@ -847,6 +1050,18 @@ export function Dashboard() {
               <h1 className="truncate text-lg font-semibold sm:text-xl">{activeLabel}</h1>
             </div>
           </div>
+          <GlobalSearch
+            query={globalSearchQuery}
+            results={globalSearchResults}
+            open={globalSearchOpen}
+            onQueryChange={(value) => {
+              setGlobalSearchQuery(value);
+              setGlobalSearchOpen(true);
+            }}
+            onFocus={() => setGlobalSearchOpen(true)}
+            onClose={() => setGlobalSearchOpen(false)}
+            onSelect={openGlobalSearchResult}
+          />
           <div className="flex shrink-0 items-center gap-2">
             <ActionButton
               type="button"
