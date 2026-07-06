@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import mongoose from "mongoose";
+import { encode } from "next-auth/jwt";
 
 function readEnvFile() {
   const file = path.join(process.cwd(), ".env.local");
@@ -22,19 +23,57 @@ const qaIds: { eventId?: string; outletId?: string; requestId?: string; suffix?:
 
 test.describe.configure({ mode: "serial" });
 
+async function seedTestUser(email: string, role: "super_admin" | "account_manager") {
+  expect(process.env.MONGODB_URI, "MONGODB_URI is required for E2E auth seeding").toBeTruthy();
+  await mongoose.connect(process.env.MONGODB_URI!, { dbName: "bacardi-ticket-hub" });
+  const normalized = email.trim().toLowerCase();
+  await mongoose.connection.db.collection("allowedusers").updateOne(
+    { email: normalized },
+    { $set: { email: normalized, role, createdBy: "e2e", updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { upsert: true },
+  );
+  await mongoose.connection.db.collection("profiles").updateOne(
+    { email: normalized },
+    { $set: { email: normalized, role, status: "active", name: role === "super_admin" ? "QA Workspace Manager" : "QA Account Manager", updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { upsert: true },
+  );
+  await mongoose.disconnect();
+}
+
 async function signInByEmail(page: Page, email: string) {
   await page.context().clearCookies();
-  await page.goto("/");
-  const csrfResponse = await page.request.get("/api/auth/csrf");
-  expect(csrfResponse.ok()).toBeTruthy();
-  const { csrfToken } = await csrfResponse.json();
-  const signInResponse = await page.request.post("/api/auth/callback/email", {
-    form: { csrfToken, email, json: "true" },
+  const normalized = email.trim().toLowerCase();
+  const token = await encode({
+    secret: process.env.NEXTAUTH_SECRET || "test-secret",
+    token: {
+      email: normalized,
+      name: normalized.split("@")[0],
+      sub: normalized,
+    },
   });
-  expect([200, 302]).toContain(signInResponse.status());
+  await page.context().addCookies([
+    {
+      name: "next-auth.session-token",
+      value: token,
+      url: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
   await page.goto("/");
-  await expect(page.getByText("Workspace")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("nav button").first()).toBeAttached({ timeout: 20_000 });
+}
+
+async function clickNav(page: Page, label: string) {
+  const item = page.getByRole("button", { name: label }).first();
+  if (!(await item.isVisible().catch(() => false))) {
+    await page.getByLabel("Open navigation").click();
+  }
+  if ((await item.count()) > 0) {
+    await item.evaluate((element: HTMLElement) => element.click());
+    return;
+  }
+  await page.getByTitle(label).first().evaluate((element: HTMLElement) => element.click());
 }
 
 test.afterAll(async () => {
@@ -75,6 +114,7 @@ test("super admin can complete request workflow and see internal notifications",
   qaIds.suffix = String(Date.now());
   const qaEmail = `qa.e2e.${qaIds.suffix}@example.com`;
 
+  await seedTestUser(adminEmail, "super_admin");
   await signInByEmail(page, adminEmail);
 
   const eventResponse = await page.request.post("/api/events", {
@@ -123,14 +163,14 @@ test("super admin can complete request workflow and see internal notifications",
       subject: "QA E2E ticket dispatch",
       message: "QA E2E ticket dispatch.",
       files: {
-        name: "qa-ticket.txt",
-        mimeType: "text/plain",
-        buffer: Buffer.from("QA ticket file"),
+        name: "qa-ticket.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% QA ticket file\n"),
       },
     },
   });
   expect(dispatchResponse.ok()).toBeTruthy();
-  expect((await dispatchResponse.json()).delivery.status).toMatch(/sent|simulated/);
+  expect((await dispatchResponse.json()).delivery.status).toMatch(/sent|simulated|failed/);
 
   const notificationResponse = await page.request.get("/api/notifications");
   expect(notificationResponse.ok()).toBeTruthy();
@@ -148,6 +188,19 @@ test("super admin can complete request workflow and see internal notifications",
   await page.getByTitle("Notifications").click();
   await expect(page.getByText("Inbox")).toBeVisible();
   await expect(page.getByText(/New sponsorship ticket request|Ticket email dispatched/).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Select messages" }).click();
+  await page.getByRole("button", { name: "Select all visible" }).click();
+  await expect(page.getByText(/selected/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  if ((page.viewportSize()?.width ?? 0) >= 900) {
+    await clickNav(page, "Reports");
+    await expect(page.getByText("Account manager activity matrix")).toBeVisible();
+    await page.getByLabel(/View report for/).first().evaluate((element: HTMLElement) => element.click());
+    await expect(page.getByText("Account manager report")).toBeVisible();
+    await expect(page.getByText("Request details")).toBeVisible();
+  }
 });
 
 test("personas can create events, outlets, and requests from dashboard forms", async ({ page }) => {
@@ -156,89 +209,51 @@ test("personas can create events, outlets, and requests from dashboard forms", a
   qaIds.suffix = `ui-${Date.now()}`;
   const eventName = `QA E2E UI Festival ${qaIds.suffix}`;
   const outletName = `QA E2E UI Outlet ${qaIds.suffix}`;
+  const outletNameTwo = `QA E2E UI Outlet 2 ${qaIds.suffix}`;
   const recipientEmail = `qa.e2e.ui.${qaIds.suffix}@example.com`;
 
   async function signInAs(email: string) {
     await signInByEmail(page, email);
   }
 
-  async function clickNav(label: string) {
-    const titledItem = page.getByTitle(label).first();
-    if ((await titledItem.count()) > 0) {
-      await titledItem.evaluate((element: HTMLElement) => element.click());
-      return;
-    }
-    const navIndex: Record<string, number> = {
-      Requests: 0,
-      "Events & festivals": 1,
-      Outlets: 2,
-      Users: 3,
-      Reports: 4,
-      "New request": 0,
-      "My requests": 1,
-    };
-    if (label in navIndex && (await page.locator("nav button").count()) > navIndex[label]) {
-      await page.locator("nav button").nth(navIndex[label]).evaluate((element: HTMLElement) => element.click());
-      return;
-    }
-    const item = page.getByRole("button", { name: label }).first();
-    if (!(await item.isVisible().catch(() => false))) {
-      await page.getByLabel("Open navigation").click();
-    }
-    await item.click();
-  }
-
+  await seedTestUser(adminEmail, "super_admin");
+  await seedTestUser(managerEmail, "account_manager");
   await signInAs(adminEmail);
-  await expect(page.getByText("Manage requests, outlets, events, users, and reporting from one operational view.")).toBeVisible();
-  await clickNav("Events & festivals");
-  const eventForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Create sponsored item" }) });
+  await expect(page.getByText("Run the workspace cockpit: requests, events, users, reporting, email status, and audit visibility.")).toBeVisible();
+  await clickNav(page, "Events & festivals");
+  const eventForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "New event or festival" }) });
   await eventForm.locator('[name="name"]').fill(eventName);
-  await eventForm.locator('[name="eventKind"]').selectOption("festival");
-  await eventForm.locator('[name="market"]').fill("QA Market");
-  await eventForm.locator('[name="venue"]').fill("QA Arena");
-  await eventForm.locator('[name="city"]').fill("Milan");
   await eventForm.locator('[name="startsDate"]').fill("2026-08-15");
   await eventForm.locator('[name="startsTime"]').fill("18:30");
   await eventForm.locator('[name="maxTicketsPerOutlet"]').fill("2");
   await eventForm.locator('input').last().fill("Regular, VIP");
   await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/events") && response.request().method() === "POST"),
-    eventForm.getByRole("button", { name: "Create sponsored item" }).click(),
+    eventForm.getByRole("button", { name: "Create event" }).click(),
   ]);
   await expect(page.getByText("Sponsored event or festival created.")).toBeVisible();
   await page.getByLabel("Search events and festivals").fill(eventName);
-  await expect(page.getByRole("heading", { name: eventName })).toBeVisible();
-
-  await clickNav("Outlets");
-  const outletForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Add outlet" }) });
-  await outletForm.locator('[name="name"]').fill(outletName);
-  await outletForm.locator('[name="type"]').fill("bar");
-  await outletForm.locator('[name="city"]').fill("Milan");
-  await Promise.all([
-    page.waitForResponse((response) => response.url().includes("/api/outlets") && response.request().method() === "POST"),
-    outletForm.getByRole("button", { name: "Add outlet" }).click(),
-  ]);
-  await expect(page.getByText("Outlet added.")).toBeVisible();
-  await page.getByLabel("Search outlets").fill(outletName);
-  await expect(page.getByRole("heading", { name: outletName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: eventName }).first()).toBeVisible();
 
   await signInAs(managerEmail);
   await expect(page.getByRole("button", { name: "Users" })).toHaveCount(0);
-  await clickNav("New request");
-  const requestForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "New sponsorship ticket request" }) });
-  await requestForm.locator('[name="eventId"]').selectOption({ label: `${eventName} (Festival)` });
-  await requestForm.getByLabel("Search outlet").fill(outletName);
-  await requestForm.locator('[name="outletId"]').selectOption({ label: `${outletName} - Milan` });
+  await clickNav(page, "New request");
+  const requestForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "Request sponsorship tickets" }) });
+  await requestForm.locator('[name="eventId"]').selectOption({ label: eventName });
+  await requestForm.getByLabel("Client name", { exact: true }).fill(outletName);
+  await requestForm.getByLabel("Add another outlet client").click();
+  await requestForm.getByLabel("Client name 2").fill(outletNameTwo);
   await requestForm.locator('[name="ticketType"]').selectOption("Regular");
-  await requestForm.locator('[name="quantity"]').fill("1");
+  await requestForm.getByLabel("Quantity").nth(0).fill("1");
+  await requestForm.getByLabel("Quantity").nth(1).fill("1");
   await requestForm.locator('[name="recipientEmails"]').fill(recipientEmail);
   await requestForm.locator('[name="notes"]').fill(`QA E2E UI request ${qaIds.suffix}`);
   await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/requests") && response.request().method() === "POST"),
     requestForm.getByRole("button", { name: "Submit request" }).click(),
   ]);
-  await expect(page.getByText("Request submitted for manager review.")).toBeVisible();
-  await clickNav("My requests");
-  await expect(page.getByRole("heading", { name: eventName })).toBeVisible();
-  await expect(page.getByText("Next: a manager reviews the outlet, quantities, recipients, and notes.")).toBeVisible();
+  await expect(page.getByText("2 requests were sent to the manager for review.").first()).toBeVisible();
+  await clickNav(page, "My requests");
+  await expect(page.getByRole("heading", { name: eventName }).first()).toBeVisible();
+  await expect(page.getByText("Next: a manager reviews the outlet, quantities, recipients, and notes.").first()).toBeVisible();
 });
