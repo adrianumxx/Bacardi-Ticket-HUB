@@ -1,5 +1,5 @@
 import { errorResponse, json } from "@/lib/api";
-import { requireWorkspaceManager } from "@/lib/authz";
+import { requireWorkspaceManager, visibleAccountManagerEmails } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { renderRequestStatus } from "@/lib/labels";
@@ -37,15 +37,20 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
 
+    const visibleEmails = await visibleAccountManagerEmails(user);
     const query: Record<string, unknown> = {};
+    const andFilters: Record<string, unknown>[] = [];
+    if (visibleEmails) andFilters.push({ requestedBy: { $in: visibleEmails } });
     if (status !== "all") query.status = status;
     if (eventId !== "all") query.event = eventId;
     if (outletId !== "all") query.outlet = outletId;
     if (accountManager) {
-      query.$or = [
+      andFilters.push({
+        $or: [
         { requestedBy: { $regex: accountManager, $options: "i" } },
         { accountManagerName: { $regex: accountManager, $options: "i" } },
-      ];
+        ],
+      });
     }
     if (dateFrom || dateTo) {
       query.createdAt = {
@@ -53,6 +58,7 @@ export async function GET(request: Request) {
         ...(dateTo ? { $lte: endOfDay(dateTo) } : {}),
       };
     }
+    if (andFilters.length > 0) query.$and = andFilters;
 
     const requests = await TicketRequest.find(query)
       .populate("event")

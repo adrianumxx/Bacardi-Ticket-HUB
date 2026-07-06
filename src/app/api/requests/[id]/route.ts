@@ -1,5 +1,5 @@
 import { badRequest, errorResponse, json } from "@/lib/api";
-import { requireWorkspaceManager } from "@/lib/authz";
+import { canAccessAccountManagerData, requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { updateRequestSchema } from "@/lib/schemas";
@@ -29,6 +29,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const input = updateRequestSchema.parse(await request.json());
     const current = await TicketRequest.findById(id).populate("event").populate("outlet");
     if (!current) return json({ error: "Request not found" }, { status: 404 });
+    if (!(await canAccessAccountManagerData(user, current.requestedBy))) {
+      return json({ error: "You can only manage requests from your assigned team." }, { status: 403 });
+    }
 
     const eventDoc = current.event as unknown as RuleEvent | null;
     const outletDoc = current.outlet as unknown as { _id: unknown; name?: string } | null;

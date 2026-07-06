@@ -23,7 +23,7 @@ const qaIds: { eventId?: string; outletId?: string; requestId?: string; suffix?:
 
 test.describe.configure({ mode: "serial" });
 
-async function seedTestUser(email: string, role: "super_admin" | "workspace_manager" | "account_manager") {
+async function seedTestUser(email: string, role: "super_admin" | "workspace_manager" | "account_manager", managerEmail = "") {
   expect(process.env.MONGODB_URI, "MONGODB_URI is required for E2E auth seeding").toBeTruthy();
   await mongoose.connect(process.env.MONGODB_URI!, { dbName: "bacardi-ticket-hub" });
   const normalized = email.trim().toLowerCase();
@@ -34,7 +34,7 @@ async function seedTestUser(email: string, role: "super_admin" | "workspace_mana
   );
   await mongoose.connection.db.collection("profiles").updateOne(
     { email: normalized },
-    { $set: { email: normalized, role, status: "active", name: role === "super_admin" ? "QA Super Admin" : role === "workspace_manager" ? "QA Workspace Manager" : "QA Account Manager", updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { $set: { email: normalized, role, status: "active", name: role === "super_admin" ? "QA Super Admin" : role === "workspace_manager" ? "QA Workspace Manager" : "QA Account Manager", managerEmail: managerEmail.trim().toLowerCase(), updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
     { upsert: true },
   );
   await mongoose.disconnect();
@@ -107,6 +107,83 @@ test.afterAll(async () => {
     ],
   });
   await mongoose.disconnect();
+});
+
+test("workspace manager only sees and manages assigned team requests", async ({ page }) => {
+  const suffix = `team-${Date.now()}`;
+  const managerEmail = `qa.e2e.manager.${suffix}@example.com`;
+  const ownedEmail = `qa.e2e.owned.${suffix}@example.com`;
+  const outsideEmail = `qa.e2e.outside.${suffix}@example.com`;
+
+  await seedTestUser(managerEmail, "workspace_manager");
+  await seedTestUser(ownedEmail, "account_manager", managerEmail);
+  await seedTestUser(outsideEmail, "account_manager");
+
+  await mongoose.connect(process.env.MONGODB_URI!, { dbName: "bacardi-ticket-hub" });
+  const db = mongoose.connection.db;
+  const eventId = new mongoose.Types.ObjectId();
+  const outletId = new mongoose.Types.ObjectId();
+  const ownedRequestId = new mongoose.Types.ObjectId();
+  const outsideRequestId = new mongoose.Types.ObjectId();
+  await db.collection("events").insertOne({
+    _id: eventId,
+    name: `QA E2E Team Festival ${suffix}`,
+    eventKind: "festival",
+    status: "published",
+    maxTicketsPerOutlet: 4,
+    ticketTypes: [{ name: "Regular", active: true }],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  await db.collection("outlets").insertOne({
+    _id: outletId,
+    name: `QA E2E Team Outlet ${suffix}`,
+    type: "bar",
+    status: "approved",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  const baseRequest = {
+    event: eventId,
+    outlet: outletId,
+    status: "pending",
+    recipientEmails: [`qa.e2e.recipient.${suffix}@example.com`],
+    items: [{ ticketType: "Regular", quantity: 1, approvedQuantity: 0 }],
+    notes: `QA E2E team visibility ${suffix}`,
+    dispatches: [],
+    history: [{ by: "e2e", action: "created", message: "QA E2E team visibility." }],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  await db.collection("ticketrequests").insertMany([
+    { ...baseRequest, _id: ownedRequestId, requestedBy: ownedEmail, accountManagerName: "QA Owned Manager" },
+    { ...baseRequest, _id: outsideRequestId, requestedBy: outsideEmail, accountManagerName: "QA Outside Manager" },
+  ]);
+  await mongoose.disconnect();
+
+  await signInByEmail(page, managerEmail);
+  const requestsResponse = await page.request.get("/api/requests");
+  expect(requestsResponse.ok()).toBeTruthy();
+  const requestPayload = await requestsResponse.json();
+  const visibleRequestIds = requestPayload.requests.map((item: { _id: string }) => String(item._id));
+  expect(visibleRequestIds).toContain(String(ownedRequestId));
+  expect(visibleRequestIds).not.toContain(String(outsideRequestId));
+
+  const reportResponse = await page.request.get(`/api/reports?accountManager=qa.e2e&dateFrom=2026-01-01`);
+  expect(reportResponse.ok()).toBeTruthy();
+  const reportPayload = await reportResponse.json();
+  expect(reportPayload.rows.map((row: { accountManagerEmail: string }) => row.accountManagerEmail)).toContain(ownedEmail);
+  expect(reportPayload.rows.map((row: { accountManagerEmail: string }) => row.accountManagerEmail)).not.toContain(outsideEmail);
+
+  const forbiddenUpdate = await page.request.patch(`/api/requests/${outsideRequestId}`, {
+    data: {
+      status: "approved",
+      recipientEmails: [`qa.e2e.recipient.${suffix}@example.com`],
+      items: [{ ticketType: "Regular", quantity: 1, approvedQuantity: 1 }],
+      adminNotes: "Should be forbidden.",
+    },
+  });
+  expect(forbiddenUpdate.status()).toBe(403);
 });
 
 test("super admin can complete request workflow and see internal notifications", async ({ page }) => {

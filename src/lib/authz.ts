@@ -48,3 +48,18 @@ export async function requireWorkspaceManager() {
 export function canManageWorkspace(role?: string) {
   return role === "super_admin" || role === "workspace_manager";
 }
+
+export async function visibleAccountManagerEmails(user: { email: string; role?: string }) {
+  if (user.role === "super_admin") return null;
+  if (user.role === "workspace_manager") {
+    const team = await Profile.find({ managerEmail: user.email, role: "account_manager" }).select("email").lean();
+    return [user.email, ...team.map((member) => normalizeEmail(member.email))];
+  }
+  return [user.email];
+}
+
+export async function canAccessAccountManagerData(user: { email: string; role?: string }, accountManagerEmail: string) {
+  if (user.role === "super_admin") return true;
+  const visibleEmails = await visibleAccountManagerEmails(user);
+  return Boolean(visibleEmails?.includes(normalizeEmail(accountManagerEmail)));
+}
