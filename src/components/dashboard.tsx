@@ -1293,6 +1293,14 @@ function UsersPanel({
       };
     })
     .sort((a, b) => a.email.localeCompare(b.email));
+  const userStats = {
+    total: combinedRows.length,
+    managers: combinedRows.filter((row) => row.role === "super_admin").length,
+    accountManagers: combinedRows.filter((row) => row.role === "account_manager").length,
+    blocked: combinedRows.filter((row) => row.status === "blocked").length,
+    missingAccess: combinedRows.filter((row) => !row.accessEnabled).length,
+    unassigned: combinedRows.filter((row) => row.role === "account_manager" && !row.managerEmail).length,
+  };
   const visibleRows = combinedRows.filter((row) =>
     [row.name, row.email, row.role, row.status, row.source, row.managerEmail].join(" ").toLowerCase().includes(userSearch.toLowerCase()),
   );
@@ -1316,6 +1324,7 @@ function UsersPanel({
         <ActionButton disabled={submitting}>{submitting ? "Saving access..." : "Enable access"}</ActionButton>
       </form>
       <div className="space-y-5">
+        <UserAccessOverview stats={userStats} />
         <EmailHealthCard status={mailStatus} />
         <AccessRequestQueue requests={users.accountRequests} onDone={onDone} notify={notify} />
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
@@ -1331,10 +1340,39 @@ function UsersPanel({
           rows={visibleRows}
           managers={combinedRows.filter((row) => row.role === "super_admin")}
           busyEmail={busyEmail}
+          searchActive={Boolean(userSearch)}
           onUpdate={updateUser}
           onDelete={deleteUser}
         />
       </div>
+    </div>
+  );
+}
+
+function UserAccessOverview({ stats }: { stats: { total: number; managers: number; accountManagers: number; blocked: number; missingAccess: number; unassigned: number } }) {
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <CompactMetric label="Users" value={stats.total} />
+      <CompactMetric label="Managers" value={stats.managers} />
+      <CompactMetric label="Account managers" value={stats.accountManagers} />
+      <CompactMetric label="Unassigned" value={stats.unassigned} tone={stats.unassigned > 0 ? "warn" : "neutral"} />
+      <CompactMetric label="Blocked" value={stats.blocked} tone={stats.blocked > 0 ? "bad" : "neutral"} />
+      <CompactMetric label="Missing access" value={stats.missingAccess} tone={stats.missingAccess > 0 ? "warn" : "neutral"} />
+    </section>
+  );
+}
+
+function CompactMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
+  const tones = {
+    neutral: "border-stone-250 bg-white",
+    good: "border-emerald-200 bg-emerald-50",
+    warn: "border-amber-200 bg-amber-50",
+    bad: "border-red-200 bg-red-50",
+  };
+  return (
+    <div className={`rounded-md border p-3 shadow-sm ${tones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-stone-950">{value}</p>
     </div>
   );
 }
@@ -1510,6 +1548,7 @@ function UserTable({
   title,
   rows,
   busyEmail,
+  searchActive,
   onUpdate,
   onDelete,
   managers = [],
@@ -1517,108 +1556,152 @@ function UserTable({
   title: string;
   rows: AdminUserRow[];
   busyEmail: string;
+  searchActive: boolean;
   onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) => Promise<void>;
   onDelete: (email: string) => Promise<void>;
   managers?: AdminUserRow[];
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <CountPill label="Users" value={rows.length} />
+        <div>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-0.5 text-xs text-stone-500">Manage roles, team ownership, access status, and account safety.</p>
+        </div>
+        <CountPill label={searchActive ? "Matches" : "Users"} value={rows.length} />
       </div>
-      <div className="hidden grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] gap-3 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">        <span>User</span>
+      <div className="hidden grid-cols-[minmax(230px,1.2fr)_150px_180px_150px_210px] gap-4 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">
+        <span>User</span>
         <span>Role</span>
         <span>Team</span>
         <span>Status</span>
-        <span>Access</span>
         <span className="text-right">Actions</span>
       </div>
       <div className="divide-y divide-stone-100">
-        {rows.map((user) => (
-          <div
-            key={`${title}-${user.email}`}
-            className="grid gap-2.5 px-4 py-3 transition-colors hover:bg-stone-50/60 xl:grid-cols-[minmax(190px,1.1fr)_130px_150px_84px_150px_1fr] xl:items-center xl:gap-3"
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[11px] font-semibold uppercase text-stone-500">
-                {user.email.slice(0, 2)}
-              </span>
-              <div className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-stone-950">{user.name || user.email}</span>
-                {user.name && <span className="block truncate text-xs text-stone-500">{user.email}</span>}
-                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-stone-400">
-                  <span>{user.lastLoginAt ? formatDate(user.lastLoginAt) : "No login yet"}</span>
-                  <span>&middot;</span>
-                  <span className="truncate">{user.source}</span>
+        {rows.map((user) => {
+          const isBusy = busyEmail === user.email;
+          const initials = (user.name || user.email).slice(0, 2);
+          const manager = managers.find((item) => item.email === user.managerEmail);
+          return (
+            <div
+              key={`${title}-${user.email}`}
+              className={`grid gap-3 px-4 py-4 transition-colors hover:bg-stone-50/60 xl:grid-cols-[minmax(230px,1.2fr)_150px_180px_150px_210px] xl:items-center xl:gap-4 ${isBusy ? "opacity-70" : ""}`}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold uppercase text-stone-500">
+                  {initials}
+                </span>
+                <div className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-stone-950">{user.name || user.email}</span>
+                  {user.name && <span className="block truncate text-xs text-stone-500">{user.email}</span>}
+                  <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-stone-400">
+                    <span>{user.lastLoginAt ? `Last login ${formatDate(user.lastLoginAt)}` : "No login yet"}</span>
+                    <span className="truncate">{user.source}</span>
+                  </div>
                 </div>
               </div>
+              <LabeledControl label="Role">
+                <MiniSelect
+                  value={user.role}
+                  disabled={isBusy}
+                  onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
+                  options={[
+                    { value: "account_manager", label: "Account manager" },
+                    { value: "super_admin", label: "Manager" },
+                  ]}
+                />
+              </LabeledControl>
+              <LabeledControl label="Team">
+                {user.role === "account_manager" ? (
+                  <MiniSelect
+                    value={user.managerEmail || ""}
+                    disabled={isBusy || managers.length === 0}
+                    onChange={(value) => void onUpdate(user.email, { managerEmail: value })}
+                    options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.name || manager.email }))]}
+                  />
+                ) : (
+                  <p className="text-sm text-stone-500">Owns team</p>
+                )}
+                {user.managerEmail && <p className="mt-1 truncate text-[11px] text-stone-400">{manager?.email || user.managerEmail}</p>}
+              </LabeledControl>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:hidden">Status</span>
+                <div className="mt-1 flex flex-wrap gap-2 xl:mt-0">
+                  <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
+                  <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Access missing"}</Badge>
+                </div>
+              </div>
+              <UserActions user={user} isBusy={isBusy} onUpdate={onUpdate} onDelete={onDelete} />
             </div>
-            <MiniSelect
-              value={user.role}
-              disabled={busyEmail === user.email}
-              onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
-              options={[
-                { value: "account_manager", label: "Account manager" },
-                { value: "super_admin", label: "Manager" },
-              ]}
-            />
-            {user.role === "account_manager" ? (
-              <MiniSelect
-                value={user.managerEmail || ""}
-                disabled={busyEmail === user.email || managers.length === 0}
-                onChange={(value) => void onUpdate(user.email, { managerEmail: value })}
-                options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.name || manager.email }))]}
-              />
-            ) : (
-              <span className="text-xs text-stone-300">-</span>
-            )}
-            <Badge tone={user.status === "blocked" ? "bad" : "good"}>{user.status === "blocked" ? "Blocked" : "Active"}</Badge>
-            <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved" : "Missing"}</Badge>
-            <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">              <ActionButton
-                variant="secondary"
-                disabled={busyEmail === user.email}
-                className="min-h-7 px-2.5 text-[11px]"
-                onClick={() => {
-                  const blocking = user.status !== "blocked";
-                  if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
-                    void onUpdate(user.email, { status: blocking ? "blocked" : "active" });
-                  }
-                }}
-              >
-                {busyEmail === user.email ? "..." : user.status === "blocked" ? "Unblock" : "Block"}
-              </ActionButton>
-              {user.accessEnabled ? (
-                <ActionButton
-                  variant="ghost"
-                  disabled={busyEmail === user.email}
-                  className="min-h-7 px-2.5 text-[11px]"
-                  onClick={() => {
-                    if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
-                      void onUpdate(user.email, { accessEnabled: false });
-                    }
-                  }}
-                >
-                  Disable
-                </ActionButton>
-              ) : (
-                <ActionButton variant="ghost" disabled={busyEmail === user.email} className="min-h-7 px-2.5 text-[11px]" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>
-                  Approve
-                </ActionButton>
-              )}
-              <ActionButton
-                variant="ghost"
-                disabled={busyEmail === user.email}
-                className="min-h-7 px-2.5 text-[11px] text-red-600"
-                onClick={() => void onDelete(user.email)}
-              >
-                Delete
-              </ActionButton>
-            </div>
-          </div>
-        ))}
-        {rows.length === 0 && <div className="p-4 text-sm text-stone-500">No users found.</div>}
+          );
+        })}
+        {rows.length === 0 && <div className="p-6"><EmptyState text={searchActive ? "No users match the current search." : "No users have been created yet."} /></div>}
       </div>
+    </div>
+  );
+}
+
+function LabeledControl({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <span className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500 xl:hidden">{label}</span>
+      <div className="mt-1 xl:mt-0">{children}</div>
+    </div>
+  );
+}
+
+function UserActions({
+  user,
+  isBusy,
+  onUpdate,
+  onDelete,
+}: {
+  user: AdminUserRow;
+  isBusy: boolean;
+  onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) => Promise<void>;
+  onDelete: (email: string) => Promise<void>;
+}) {
+  const blocking = user.status !== "blocked";
+  return (
+    <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">
+      <ActionButton
+        variant="secondary"
+        disabled={isBusy}
+        className="min-h-8 px-3 text-[11px]"
+        onClick={() => {
+          if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
+            void onUpdate(user.email, { status: blocking ? "blocked" : "active" });
+          }
+        }}
+      >
+        {isBusy ? "Working..." : user.status === "blocked" ? "Unblock" : "Block"}
+      </ActionButton>
+      {user.accessEnabled ? (
+        <ActionButton
+          variant="ghost"
+          disabled={isBusy}
+          className="min-h-8 px-3 text-[11px]"
+          onClick={() => {
+            if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
+              void onUpdate(user.email, { accessEnabled: false });
+            }
+          }}
+        >
+          Disable
+        </ActionButton>
+      ) : (
+        <ActionButton variant="ghost" disabled={isBusy} className="min-h-8 px-3 text-[11px]" onClick={() => void onUpdate(user.email, { accessEnabled: true, role: user.role })}>
+          Restore
+        </ActionButton>
+      )}
+      <ActionButton
+        variant="ghost"
+        disabled={isBusy}
+        className="min-h-8 px-3 text-[11px] text-red-600"
+        onClick={() => void onDelete(user.email)}
+      >
+        Delete
+      </ActionButton>
     </div>
   );
 }
