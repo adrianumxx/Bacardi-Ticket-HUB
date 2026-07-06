@@ -199,6 +199,7 @@ type GlobalSearchResult = {
   detail: string;
   tab: string;
   quickFilter?: RequestQuickFilter;
+  eventId?: string;
 };
 
 type DispatchRetrySeed = {
@@ -225,6 +226,10 @@ function notificationTone(status: NotificationRecord["status"]): Tone {
 
 function requestTicketTotal(request: TicketRequest) {
   return request.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function approvedTicketTotal(request: TicketRequest) {
+  return request.items.reduce((sum, item) => sum + (item.approvedQuantity ?? 0), 0);
 }
 
 function requestHasFailedDispatch(request: TicketRequest) {
@@ -839,6 +844,7 @@ export function Dashboard() {
   const [notice, setNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [loading, setLoading] = useState(false);
   const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("attention");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
 
@@ -990,8 +996,9 @@ export function Dashboard() {
           id: `event-${event._id}`,
           group: "Events",
           title: event.name,
-          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} · ${renderEventStatus(event.status)}${event.city ? ` · ${event.city}` : ""}`,
+          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} - ${renderEventStatus(event.status)}${event.city ? ` - ${event.city}` : ""}`,
           tab: isWorkspaceManager(role) ? "events" : "new-request",
+          eventId: event._id,
         });
       }
     }
@@ -1066,6 +1073,7 @@ export function Dashboard() {
 
   function openGlobalSearchResult(result: GlobalSearchResult) {
     if (result.quickFilter) setRequestQuickFilter(result.quickFilter);
+    if (result.eventId) setSelectedEventId(result.eventId);
     openTab(result.tab);
     setGlobalSearchOpen(false);
     setGlobalSearchQuery("");
@@ -1287,7 +1295,16 @@ export function Dashboard() {
               notify={showNotice}
             />
           )}
-          {currentTab === "events" && <EventsPanel events={events} onDone={refresh} notify={showNotice} />}
+          {currentTab === "events" && (
+            <EventsPanel
+              events={events}
+              requests={requests}
+              selectedEventId={selectedEventId}
+              onSelectEvent={setSelectedEventId}
+              onDone={refresh}
+              notify={showNotice}
+            />
+          )}
           {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "audit" && <AuditPanel />}
@@ -1593,7 +1610,128 @@ function dateTimeFromForm(form: FormData) {
   return new Date(`${date}T${time || "00:00"}`).toISOString();
 }
 
-function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+function EventPage({
+  event,
+  requests,
+  onClose,
+}: {
+  event: EventItem;
+  requests: TicketRequest[];
+  onClose: () => void;
+}) {
+  const totals = requests.reduce(
+    (sum, request) => {
+      sum.requests += 1;
+      sum.requested += requestTicketTotal(request);
+      sum.approved += approvedTicketTotal(request);
+      sum.recipients += request.recipientEmails.length;
+      sum.dispatches += request.dispatches.length;
+      if (request.status === "pending") sum.pending += 1;
+      if (request.status === "rejected") sum.rejected += 1;
+      return sum;
+    },
+    { requests: 0, requested: 0, approved: 0, pending: 0, rejected: 0, recipients: 0, dispatches: 0 },
+  );
+  const outlets = [...new Set(requests.map((request) => request.outlet?.name).filter(Boolean))] as string[];
+  const latestRequest = requests
+    .map((request) => request.createdAt)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+
+  return (
+    <section className="overflow-hidden rounded-md border border-[#ECDFC8] bg-white shadow-sm">
+      <div className="border-b border-[#ECDFC8] bg-[#3A2A18] p-5 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ECDFC8]">{event.eventKind === "festival" ? "Festival page" : "Event page"}</p>
+            <h2 className="mt-2 text-2xl font-semibold">{event.name}</h2>
+            <p className="mt-2 text-sm text-white/75">
+              {[event.market, event.city, event.venue, formatDate(event.startsAt)].filter(Boolean).join(" - ") || "No location or date added yet."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={event.status === "published" ? "good" : event.status === "closed" ? "bad" : "neutral"}>{renderEventStatus(event.status)}</Badge>
+            <ActionButton type="button" variant="secondary" onClick={onClose}>Close page</ActionButton>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 p-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-4">
+          {event.description && <p className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm leading-6 text-stone-700">{event.description}</p>}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <MiniMetric label="Requests" value={totals.requests} />
+            <MiniMetric label="Requested" value={totals.requested} />
+            <MiniMetric label="Approved" value={totals.approved} tone="good" />
+            <MiniMetric label="Pending" value={totals.pending} tone="warn" />
+            <MiniMetric label="Rejected" value={totals.rejected} tone="bad" />
+            <MiniMetric label="Outlets" value={outlets.length} />
+            <MiniMetric label="Recipients" value={totals.recipients} />
+            <MiniMetric label="Dispatches" value={totals.dispatches} tone={totals.dispatches > 0 ? "good" : "neutral"} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-stone-200 bg-stone-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">Ticket rule</p>
+              <p className="mt-1 text-sm text-stone-800">Max {event.maxTicketsPerOutlet} ticket{event.maxTicketsPerOutlet === 1 ? "" : "s"} per outlet.</p>
+            </div>
+            <div className="rounded-md border border-stone-200 bg-stone-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">Latest request</p>
+              <p className="mt-1 text-sm text-stone-800">{latestRequest ? formatShortDate(latestRequest) : "No requests yet."}</p>
+            </div>
+          </div>
+          <div className="rounded-md border border-stone-200 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">Ticket types</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {event.ticketTypes.map((type) => <Badge key={type.name} tone={type.active ? "neutral" : "bad"}>{type.name}</Badge>)}
+              {event.ticketTypes.length === 0 && <p className="text-sm text-stone-500">No ticket types configured.</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-stone-200">
+          <div className="border-b border-stone-200 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">Linked requests</p>
+          </div>
+          <div className="max-h-[420px] divide-y overflow-auto">
+            {requests.slice(0, 8).map((request) => (
+              <div key={request._id} className="grid gap-2 p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{request.outlet?.name || "Outlet"}</p>
+                    <p className="truncate text-xs text-stone-500">{request.accountManagerName || request.requestedBy}</p>
+                  </div>
+                  <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge>{requestTicketTotal(request)} requested</Badge>
+                  <Badge tone={approvedTicketTotal(request) > 0 ? "good" : "neutral"}>{approvedTicketTotal(request)} approved</Badge>
+                  <Badge tone={request.dispatches.length > 0 ? "good" : "neutral"}>{request.dispatches.length} dispatch</Badge>
+                </div>
+              </div>
+            ))}
+            {requests.length === 0 && <div className="p-4"><EmptyState text="No requests have been created for this event yet." /></div>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EventsPanel({
+  events,
+  requests,
+  selectedEventId,
+  onSelectEvent,
+  onDone,
+  notify,
+}: {
+  events: EventItem[];
+  requests: TicketRequest[];
+  selectedEventId: string | null;
+  onSelectEvent: (id: string | null) => void;
+  onDone: () => Promise<void>;
+  notify: (message: string, tone?: Tone) => void;
+}) {
   const [ticketTypes, setTicketTypes] = useState("Regular, VIP");
   const [creating, setCreating] = useState(false);
   const [eventActionId, setEventActionId] = useState("");
@@ -1602,6 +1740,8 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
   const filteredEvents = events.filter((event) =>
     [event.name, event.status].join(" ").toLowerCase().includes(eventSearch.toLowerCase()),
   );
+  const selectedEvent = events.find((event) => event._id === selectedEventId) ?? null;
+  const selectedEventRequests = selectedEvent ? requests.filter((request) => request.event?._id === selectedEvent._id) : [];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1713,7 +1853,9 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(380px,500px)_1fr]">
+    <div className="space-y-5">
+      {selectedEvent && <EventPage event={selectedEvent} requests={selectedEventRequests} onClose={() => onSelectEvent(null)} />}
+      <div className="grid gap-5 xl:grid-cols-[minmax(380px,500px)_1fr]">
       <form onSubmit={submit} className="space-y-4 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Setup</p>
@@ -1768,7 +1910,18 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
           <details key={event._id} className="p-4">
             <summary className="flex cursor-pointer list-none flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="font-semibold">{event.name}</h3>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={(clickEvent) => {
+                      clickEvent.preventDefault();
+                      onSelectEvent(event._id);
+                    }}
+                    className="text-left font-semibold text-stone-950 underline-offset-4 hover:text-[#EB6A1C] hover:underline"
+                  >
+                    {event.name}
+                  </button>
+                </h3>
                 <p className="text-sm text-stone-600">{formatDate(event.startsAt)}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -1816,6 +1969,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
         ))}
         {filteredEvents.length === 0 && <div className="p-4"><EmptyState text={events.length === 0 ? "No sponsored events or festivals have been created yet." : "No sponsored items match the current search."} /></div>}
         </div>
+      </div>
       </div>
     </div>
   );
