@@ -674,7 +674,7 @@ export function Dashboard() {
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
-          {currentTab === "settings" && <SettingsPanel notify={showNotice} />}
+          {currentTab === "settings" && <SettingsPanel notify={showNotice} onDone={refresh} />}
         </section>
       </div>
     </main>
@@ -1824,7 +1824,8 @@ function AdminRequests({ requests, events, outlets, onDone, notify }: { requests
     const matchesStatus = statusFilter === "all" || request.status === statusFilter;
     const matchesEvent = eventFilter === "all" || request.event?._id === eventFilter;
     const matchesOutlet = outletFilter === "all" || request.outlet?._id === outletFilter;
-    const matchesManager = !managerFilter || request.requestedBy.toLowerCase().includes(managerFilter.toLowerCase());
+    const managerHaystack = [request.accountManagerName, request.requestedBy].filter(Boolean).join(" ").toLowerCase();
+    const matchesManager = !managerFilter || managerHaystack.includes(managerFilter.toLowerCase());
     return matchesStatus && matchesEvent && matchesOutlet && matchesManager;
   });
 
@@ -1855,7 +1856,7 @@ function AdminRequests({ requests, events, outlets, onDone, notify }: { requests
           </select>
         </Field>
         <Field label="Account manager">
-          <input value={managerFilter} onChange={(event) => setManagerFilter(event.target.value)} className={inputClass} placeholder="Search email" />
+          <input value={managerFilter} onChange={(event) => setManagerFilter(event.target.value)} className={inputClass} placeholder="Search name or email" />
         </Field>
       </div>
 
@@ -2234,8 +2235,9 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
         <div>
           <h3 className="text-lg font-semibold">{request.event?.name}</h3>
           <p className="text-sm text-stone-600">
-            {request.outlet?.name} - {request.requestedBy}
+            {request.outlet?.name} - {request.accountManagerName || request.requestedBy}
           </p>
+          {request.accountManagerName && <p className="mt-0.5 text-xs text-stone-500">{request.requestedBy}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           {request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}
@@ -2410,7 +2412,7 @@ function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; on
   );
 }
 
-function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => void }) {
+function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: Tone) => void; onDone: () => Promise<void> }) {
   const { data: session, update } = useSession();
   const role = session?.user?.role as Role | undefined;
   const [firstName, setFirstName] = useState("");
@@ -2434,9 +2436,10 @@ function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => v
     if (!firstName.trim()) return notify("First name is required.", "bad");
     setSaving(true);
     try {
-      await api("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName }) });
+      const result = await api<{ updatedRequests?: number }>("/api/profile", { method: "PATCH", body: JSON.stringify({ firstName, lastName }) });
       await update();
-      notify("Profile updated.");
+      await onDone();
+      notify(`Profile updated everywhere${typeof result.updatedRequests === "number" ? ` across ${result.updatedRequests} request${result.updatedRequests === 1 ? "" : "s"}` : ""}.`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Unable to update your profile.", "bad");
     } finally {
@@ -2486,7 +2489,9 @@ function SettingsPanel({ notify }: { notify: (message: string, tone?: Tone) => v
 type ReportRow = Record<string, string | number>;
 
 type ManagerSummary = {
+  key: string;
   manager: string;
+  email: string;
   requests: number;
   tickets: number;
   approvedTickets: number;
@@ -2785,11 +2790,14 @@ function StatusBreakdownChart({ rows }: { rows: ReportRow[] }) {
 function buildManagerSummaries(rows: ReportRow[]) {
   const map = new Map<string, ManagerSummary>();
     for (const row of rows) {
-      const manager = String(row.accountManager || "Unknown manager").trim() || "Unknown manager";
+      const email = String(row.accountManagerEmail || row.accountManager || "Unknown manager").trim() || "Unknown manager";
+      const manager = String(row.accountManager || email).trim() || email;
       const current =
-        map.get(manager) ??
+        map.get(email) ??
         {
+          key: email,
           manager,
+          email,
           requests: 0,
           tickets: 0,
           approvedTickets: 0,
@@ -2815,7 +2823,8 @@ function buildManagerSummaries(rows: ReportRow[]) {
       if (event) current.events.set(event, (current.events.get(event) ?? 0) + Number(row.quantity || 0));
       const createdAt = String(row.createdAt || "");
       if (createdAt && (!current.latest || new Date(createdAt) > new Date(current.latest))) current.latest = createdAt;
-      map.set(manager, current);
+      current.manager = manager;
+      map.set(email, current);
     }
 
   return [...map.values()].sort((a, b) => b.tickets - a.tickets || b.requests - a.requests);
@@ -2855,14 +2864,15 @@ function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }: { row
               const approvalRate = manager.requests ? Math.round((manager.approved / manager.requests) * 100) : 0;
               return (
                 <button
-                  key={manager.manager}
+                  key={manager.key}
                   type="button"
-                  className={`grid w-full cursor-pointer gap-3 px-3 py-3 text-left text-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#EB6A1C]/40 xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] xl:items-center ${selectedManager === manager.manager ? "bg-amber-50/60" : ""}`}
-                  onClick={() => onSelectManager(manager.manager)}
+                  className={`grid w-full cursor-pointer gap-3 px-3 py-3 text-left text-sm transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#EB6A1C]/40 xl:grid-cols-[minmax(210px,1.2fr)_90px_90px_150px_1fr_1fr_110px_110px] xl:items-center ${selectedManager === manager.key ? "bg-amber-50/60" : ""}`}
+                  onClick={() => onSelectManager(manager.key)}
                   aria-label={`View report for ${manager.manager}`}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-stone-950" title={manager.manager}>{manager.manager}</p>
+                    {manager.email !== manager.manager && <p className="mt-0.5 truncate text-xs text-stone-500" title={manager.email}>{manager.email}</p>}
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
                       <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${Math.max(6, (manager.tickets / maxTickets) * 100)}%` }} />
                     </div>
@@ -2910,7 +2920,7 @@ function TextMetric({ label, value }: { label: string; value: string }) {
 }
 
 function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; rows: ReportRow[]; onClose: () => void }) {
-  const managerRows = useMemo(() => rows.filter((row) => String(row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
+  const managerRows = useMemo(() => rows.filter((row) => String(row.accountManagerEmail || row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
   const summary = useMemo(() => buildManagerSummaries(managerRows)[0], [managerRows]);
   const festivals = useMemo(() => {
     const map = new Map<string, FestivalSummary>();
@@ -2966,7 +2976,8 @@ function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; ro
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Account manager report</p>
-            <h2 className="mt-1 truncate text-xl font-semibold">{manager}</h2>
+            <h2 className="mt-1 truncate text-xl font-semibold">{summary?.manager || manager}</h2>
+            {summary?.email && summary.email !== summary.manager && <p className="mt-0.5 truncate text-xs text-stone-500">{summary.email}</p>}
             <p className="mt-1 text-sm text-stone-600">Filtered report by festival/event, outlet, status, and dispatch activity.</p>
           </div>
           <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
@@ -3046,7 +3057,7 @@ function AnalyticsSection({ rows, selectedManager, onSelectManager }: { rows: Re
   const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const totalDispatches = rows.reduce((sum, row) => sum + Number(row.dispatches || 0), 0);
-  const uniqueManagers = new Set(rows.map((row) => String(row.accountManager || ""))).size;
+  const uniqueManagers = new Set(rows.map((row) => String(row.accountManagerEmail || row.accountManager || ""))).size;
   const uniqueOutlets = new Set(rows.map((row) => String(row.outlet || ""))).size;
   const approved = rows.filter((row) => ["Approved", "Partially approved"].includes(String(row.status))).length;
   const pending = rows.filter((row) => String(row.status) === "Pending").length;
@@ -3100,7 +3111,7 @@ function AnalyticsSection({ rows, selectedManager, onSelectManager }: { rows: Re
 }
 
 function ReportsPanel() {
-  const [rows, setRows] = useState<Record<string, string | number>[]>([]);
+  const [rows, setRows] = useState<ReportRow[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [reportSearch, setReportSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -3113,7 +3124,7 @@ function ReportsPanel() {
     () =>
       rows.filter((row) => {
         const matchesStatus = statusFilter === "all" || String(row.status) === renderRequestStatus(statusFilter);
-        const haystack = [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.status].join(" ").toLowerCase();
+        const haystack = [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.accountManagerEmail, row.status].join(" ").toLowerCase();
         return matchesStatus && haystack.includes(reportSearch.toLowerCase());
       }),
     [reportSearch, rows, statusFilter],
@@ -3135,7 +3146,7 @@ function ReportsPanel() {
     const params = reportParams();
     setLoadingReport(true);
     try {
-      const data = await api<{ rows: Record<string, string | number>[] }>(`/api/reports?${params.toString()}`);
+      const data = await api<{ rows: ReportRow[] }>(`/api/reports?${params.toString()}`);
       setRows(data.rows);
     } catch (error) {
       setExportNotice({ message: error instanceof Error ? error.message : "Unable to load the report.", tone: "bad" });
@@ -3153,8 +3164,8 @@ function ReportsPanel() {
       const doc = new jsPDF();
       doc.text("Bacardi Ticket Hub Report", 14, 14);
       autoTable.default(doc, {
-        head: [["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Status", "Tickets", "Dispatches"]],
-        body: filteredRows.map((row) => [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.status, row.quantity, row.dispatches]),
+        head: [["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Email", "Status", "Tickets", "Dispatches"]],
+        body: filteredRows.map((row) => [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.accountManagerEmail, row.status, row.quantity, row.dispatches]),
         startY: 22,
       });
       doc.save("bacardi-ticket-report.pdf");
@@ -3255,7 +3266,10 @@ function ReportsPanel() {
                   <td>{row.eventKind}</td>
                   <td>{row.market}</td>
                   <td>{row.outlet}</td>
-                  <td>{row.accountManager}</td>
+                  <td>
+                    <p>{row.accountManager}</p>
+                    {row.accountManagerEmail && row.accountManagerEmail !== row.accountManager && <p className="text-xs text-stone-500">{row.accountManagerEmail}</p>}
+                  </td>
                   <td>{String(row.status)}</td>
                   <td>{row.quantity}</td>
                   <td>{row.dispatches}</td>

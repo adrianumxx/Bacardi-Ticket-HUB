@@ -1,7 +1,7 @@
 import { errorResponse, json } from "@/lib/api";
 import { requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
-import { Profile } from "@/lib/models";
+import { Profile, TicketRequest } from "@/lib/models";
 import { profileUpdateSchema } from "@/lib/schemas";
 import { auditLog } from "@/lib/audit";
 
@@ -17,9 +17,10 @@ export async function PATCH(request: Request) {
       { $set: { name } },
       { new: true },
     ).lean();
+    const requests = await TicketRequest.updateMany({ requestedBy: user.email }, { $set: { accountManagerName: name } });
 
-    await auditLog({ actor: user.email, action: "profile.updated", target: user.email, payload: { name } });
-    return json({ profile });
+    await auditLog({ actor: user.email, action: "profile.updated", target: user.email, payload: { name, updatedRequests: requests.modifiedCount } });
+    return json({ profile, updatedRequests: requests.modifiedCount });
   } catch (error) {
     return errorResponse(error);
   }

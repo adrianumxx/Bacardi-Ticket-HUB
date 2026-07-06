@@ -12,6 +12,7 @@ type ReportLine = {
   event?: { name?: string; eventKind?: string; sponsorshipName?: string; sponsorshipTier?: string; market?: string };
   outlet?: { name?: string; city?: string; type?: string };
   requestedBy: string;
+  accountManagerName?: string;
   status: string;
   items: { ticketType: string; quantity: number; approvedQuantity?: number }[];
   dispatches: unknown[];
@@ -40,7 +41,12 @@ export async function GET(request: Request) {
     if (status !== "all") query.status = status;
     if (eventId !== "all") query.event = eventId;
     if (outletId !== "all") query.outlet = outletId;
-    if (accountManager) query.requestedBy = { $regex: accountManager, $options: "i" };
+    if (accountManager) {
+      query.$or = [
+        { requestedBy: { $regex: accountManager, $options: "i" } },
+        { accountManagerName: { $regex: accountManager, $options: "i" } },
+      ];
+    }
     if (dateFrom || dateTo) {
       query.createdAt = {
         ...(dateFrom ? { $gte: new Date(dateFrom) } : {}),
@@ -71,7 +77,8 @@ export async function GET(request: Request) {
         outlet: outlet?.name || "",
         outletCity: outlet?.city || "",
         outletType: outlet?.type || "",
-        accountManager: item.requestedBy,
+        accountManager: item.accountManagerName || item.requestedBy,
+        accountManagerEmail: item.requestedBy,
         status: renderRequestStatus(item.status),
         quantity,
         approved,
@@ -93,6 +100,7 @@ export async function GET(request: Request) {
         ["outletCity", "Outlet City"],
         ["outletType", "Outlet Type"],
         ["accountManager", "Account Manager"],
+        ["accountManagerEmail", "Account Manager Email"],
         ["status", "Status"],
         ["quantity", "Requested Tickets"],
         ["approved", "Approved Tickets"],
