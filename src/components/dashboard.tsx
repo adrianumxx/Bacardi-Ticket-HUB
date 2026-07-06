@@ -1907,8 +1907,8 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
 
       <Step title="4. Recipients and notes">
         <div className="grid gap-3">
-          <Field label="Recipient emails" hint="A manager can edit these later.">
-            <input name="recipientEmails" type="email" multiple required placeholder="client@outlet.com, manager@agency.com" className={inputClass} />
+          <Field label="Recipient emails" hint="Separate multiple addresses with commas. A manager can edit these later.">
+            <input name="recipientEmails" type="text" inputMode="email" required placeholder="client@outlet.com, manager@agency.com" className={inputClass} />
           </Field>
           <Field label="Notes"><textarea name="notes" className={inputClass} rows={4} /></Field>
         </div>
@@ -1919,7 +1919,7 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
           {blockedReason && <Notice message={blockedReason} tone="bad" />}
           {formError && <Notice message={formError} tone="bad" />}
           {submittedMessage && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-sm">
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
                 <div className="grid gap-3">
@@ -1927,18 +1927,18 @@ function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outl
                     <p className="font-semibold">Request sent</p>
                     <p className="mt-1">{submittedMessage}</p>
                   </div>
-          <ActionButton
-            type="button"
-            variant="secondary"
-            className="w-fit"
-            onClick={() => {
-              setSubmittedMessage("");
-              setFormError("");
-            }}
-          >
-            <Plus size={16} />
-            Send another request
-          </ActionButton>
+                  <ActionButton
+                    type="button"
+                    variant="secondary"
+                    className="w-fit"
+                    onClick={() => {
+                      setSubmittedMessage("");
+                      setFormError("");
+                    }}
+                  >
+                    <Plus size={16} />
+                    Send another request
+                  </ActionButton>
                 </div>
               </div>
             </div>
@@ -2229,6 +2229,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
   const defaultMessage = `Attached are the approved ticket files for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+  const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
 
   async function sendTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2265,7 +2266,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
           <h4 className="text-sm font-semibold">Ticket files</h4>
           <p className="text-sm text-stone-600">
             {canSendTickets
-              ? "Approved: attach files and email them to anyone you choose."
+              ? `${approvedTotal || "Approved"} ticket${approvedTotal === 1 ? "" : "s"} ready to dispatch by email.`
               : "Approve or partially approve this request first, then send ticket files here."}
           </p>
         </div>
@@ -2310,9 +2311,11 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
           <div className="w-full max-w-md rounded-md border border-stone-200 bg-white p-5 shadow-xl">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Confirm dispatch</p>
             <h3 className="mt-2 text-xl font-semibold">Send ticket files?</h3>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              Send {pendingSend.fileCount} attachment{pendingSend.fileCount === 1 ? "" : "s"} to {pendingSend.recipients.join(", ")}. Files are emailed now and are not stored in the platform.
-            </p>
+            <div className="mt-3 grid gap-2 rounded-md bg-stone-50 p-3 text-sm text-stone-700">
+              <p><strong>Files:</strong> {pendingSend.fileCount} attachment{pendingSend.fileCount === 1 ? "" : "s"}</p>
+              <p className="break-words"><strong>Recipients:</strong> {pendingSend.recipients.join(", ")}</p>
+              <p className="text-xs text-stone-500">Files are emailed now and are not stored in the platform.</p>
+            </div>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
               <ActionButton variant="ghost" disabled={sending} onClick={() => setPendingSend(null)}>Cancel</ActionButton>
               <ActionButton disabled={sending} onClick={() => void confirmSendTicket()}>{sending ? "Sending..." : "Confirm send"}</ActionButton>
@@ -2334,6 +2337,10 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
     Object.fromEntries(request.items.map((item, index) => [index, item.approvedQuantity ?? (request.status === "approved" ? item.quantity : 0)])),
   );
   const [quickAction, setQuickAction] = useState<"" | "approved" | "rejected">("");
+  const requestedTotal = request.items.reduce((sum, item) => sum + item.quantity, 0);
+  const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
+  const managerName = request.accountManagerName || request.requestedBy;
+  const dispatchCount = request.dispatches.length;
 
   // One-click approve/reject for the common case, visible directly on the
   // collapsed row so the manager never has to open a request just to approve
@@ -2371,7 +2378,6 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
         approvedQuantity: status === "approved" ? item.quantity : status === "rejected" || status === "pending" ? 0 : partialApproved,
       };
     });
-    const requestedTotal = request.items.reduce((sum, item) => sum + item.quantity, 0);
     const approvedTotal = nextItems.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
     if (status === "partially_approved" && (approvedTotal <= 0 || approvedTotal >= requestedTotal)) {
       return notify("Partial approval must approve at least one ticket but less than requested.", "bad");
@@ -2408,17 +2414,22 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
 
   return (
     <details className={`overflow-hidden rounded-md border border-l-4 border-stone-250 bg-white p-4 shadow-sm transition hover:shadow-md ${borderTones[statusTone(request.status)]}`}>
-      <summary className="grid cursor-pointer list-none gap-3 md:grid-cols-[1.5fr_1fr_auto] md:items-center">
-        <div>
-          <h3 className="text-lg font-semibold">{request.event?.name}</h3>
-          <p className="text-sm text-stone-600">
-            {request.outlet?.name} - {request.accountManagerName || request.requestedBy}
+      <summary className="grid cursor-pointer list-none gap-4 md:grid-cols-[minmax(0,1.35fr)_minmax(260px,0.9fr)_auto] md:items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-lg font-semibold">{request.event?.name}</h3>
+            <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-stone-600">{request.outlet?.name}</p>
+          <p className="mt-0.5 truncate text-xs text-stone-500" title={request.requestedBy}>
+            {managerName}{request.accountManagerName ? ` · ${request.requestedBy}` : ""}
           </p>
-          {request.accountManagerName && <p className="mt-0.5 text-xs text-stone-500">{request.requestedBy}</p>}
         </div>
-        <div className="flex flex-wrap gap-2">
-          {request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}
-          <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
+          <RequestMetric label="Requested" value={requestedTotal} />
+          <RequestMetric label="Approved" value={approvedTotal} tone={approvedTotal > 0 ? "good" : "neutral"} />
+          <RequestMetric label="Recipients" value={request.recipientEmails.length} />
+          <RequestMetric label="Dispatches" value={dispatchCount} tone={dispatchCount > 0 ? "good" : "neutral"} />
         </div>
         <div className="flex items-center justify-end gap-2">
           {request.status === "pending" && (
@@ -2451,14 +2462,24 @@ function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDo
               </ActionButton>
             </div>
           )}
-          <span className="hidden text-sm text-stone-500 md:inline">{formatShortDate(request.createdAt)}</span>
+          <span className="hidden whitespace-nowrap text-sm text-stone-500 md:inline">{formatShortDate(request.createdAt)}</span>
           <ChevronDown size={18} className="text-stone-400" />
         </div>
       </summary>
 
       <div className="mt-4 grid gap-4 border-t border-stone-200 pt-4">
         {actionError && <Notice message={actionError} tone="bad" />}
-        {request.notes && <p className="rounded-md bg-stone-100 p-3 text-sm text-stone-700">{request.notes}</p>}
+        <div className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700 lg:grid-cols-3">
+          <RequestInfo label="Ticket types" value={request.items.map((item) => `${item.ticketType} x${item.quantity}`).join(", ")} />
+          <RequestInfo label="Recipients" value={request.recipientEmails.join(", ") || "No recipients"} />
+          <RequestInfo label="Created" value={formatDate(request.createdAt)} />
+        </div>
+        {request.notes && (
+          <section className="rounded-md border border-stone-200 bg-white p-3">
+            <h4 className="text-sm font-semibold">Account manager notes</h4>
+            <p className="mt-2 text-sm text-stone-700">{request.notes}</p>
+          </section>
+        )}
 
         <section className="rounded-md border border-stone-200 bg-stone-50 p-3">
           <h4 className="text-sm font-semibold">Approval quantities</h4>
@@ -2543,17 +2564,44 @@ function DispatchList({ dispatches }: { dispatches: TicketRequest["dispatches"] 
       <h4 className="text-sm font-semibold">Ticket dispatches</h4>
       <div className="mt-3 space-y-3">
         {dispatches.map((dispatch, index) => (
-          <div key={`${dispatch.at}-${index}`} className="text-sm">
-            <p className="font-medium">
-              <Mail className="mr-1 inline" size={14} /> {dispatch.recipients.join(", ")}
-            </p>
-            <p className="text-stone-600">{dispatch.fileNames.join(", ") || "No file names recorded"}</p>
-            <Badge tone={dispatch.status === "sent" ? "good" : dispatch.status === "failed" ? "bad" : "warn"}>{dispatch.status}</Badge>
+          <div key={`${dispatch.at}-${index}`} className="rounded-md border border-stone-100 bg-stone-50 p-3 text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="break-words font-medium">
+                <Mail className="mr-1 inline" size={14} /> {dispatch.recipients.join(", ")}
+              </p>
+              <Badge tone={dispatch.status === "sent" ? "good" : dispatch.status === "failed" ? "bad" : "warn"}>{dispatch.status}</Badge>
+            </div>
+            <p className="mt-1 text-stone-600">{dispatch.fileNames.join(", ") || "No file names recorded"}</p>
+            <p className="mt-1 text-xs text-stone-500">{formatDate(dispatch.at)}</p>
           </div>
         ))}
         {dispatches.length === 0 && <p className="text-sm text-stone-500">No ticket emails have been sent.</p>}
       </div>
     </section>
+  );
+}
+
+function RequestMetric({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
+  const tones = {
+    neutral: "border-stone-200 bg-stone-50 text-stone-950",
+    good: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    warn: "border-amber-200 bg-amber-50 text-amber-900",
+    bad: "border-red-200 bg-red-50 text-red-900",
+  };
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function RequestInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="mt-1 truncate font-medium text-stone-800" title={value}>{value}</p>
+    </div>
   );
 }
 
