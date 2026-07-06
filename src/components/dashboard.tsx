@@ -1042,15 +1042,15 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(320px,420px)_1fr]">
-      <form onSubmit={submit} className="space-y-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
+    <div className="grid gap-5 xl:grid-cols-[minmax(380px,500px)_1fr]">
+      <form onSubmit={submit} className="space-y-4 rounded-md border border-stone-250 bg-white p-4 shadow-sm xl:sticky xl:top-20 xl:h-fit">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Setup</p>
-          <h2 className="mt-1 text-lg font-semibold">Create sponsored item</h2>
-          <p className="mt-1 text-sm leading-6 text-stone-600">Publish the event or festival before account managers can request tickets.</p>
+          <h2 className="mt-1 text-lg font-semibold">New event or festival</h2>
+          <p className="mt-1 text-sm leading-6 text-stone-600">Create the item account managers can request tickets for.</p>
         </div>
-        <Field label="Event or festival name"><input name="name" required autoFocus placeholder="e.g. Tomorrowland" className={inputClass} /></Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Name"><input name="name" required autoFocus placeholder="Tomorrowland" className={inputClass} /></Field>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(150px,0.75fr)]">
           <Field label="Date">
             <input name="startsDate" type="date" className={inputClass} />
           </Field>
@@ -1058,7 +1058,7 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
             <input name="startsTime" type="time" className={inputClass} />
           </Field>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(170px,0.9fr)]">
           <Field label="Status">
             <select name="status" className={inputClass} defaultValue="published">
               <option value="draft">Draft</option>
@@ -1066,15 +1066,15 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
               <option value="closed">Closed</option>
             </select>
           </Field>
-          <Field label="Max tickets per outlet">
+          <Field label="Ticket limit per outlet">
             <input name="maxTicketsPerOutlet" type="number" min={1} defaultValue={2} className={inputClass} />
           </Field>
         </div>
-        <Field label="Ticket types" hint="Comma-separated, for example Regular, VIP, Backstage.">
+        <Field label="Ticket types" hint="Separate with commas, e.g. Regular, VIP.">
           <input value={ticketTypes} onChange={(event) => setTicketTypes(event.target.value)} className={inputClass} />
         </Field>
         {formError && <Notice message={formError} tone="bad" />}
-        <ActionButton disabled={creating}>{creating ? "Creating sponsored item..." : "Create sponsored item"}</ActionButton>
+        <ActionButton disabled={creating}>{creating ? "Creating..." : "Create event"}</ActionButton>
       </form>
 
       <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
