@@ -20,10 +20,13 @@ import {
 } from "./helpers";
 import { ActionButton, Badge, CompactRequestMetric, EmptyState, Field, Notice, PanelIntro, RequestInfo, Step } from "./ui-primitives";
 import { ManagerAnalytics, FlowMap } from "./reports-panel";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { localeMap } from "@/lib/i18n/translations";
 
 const INITIAL_VISIBLE_REQUESTS = 8;
 
 export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+  const { t } = useTranslation();
   const published = events.filter((event) => event.status === "published");
   const [eventId, setEventId] = useState("");
   const outletIdCounter = useRef(1);
@@ -41,11 +44,11 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
     submittedMessage
       ? ""
       : published.length === 0
-      ? "No published events or festivals are available."
+      ? t("requests.noPublishedEvents")
       : validOutletRows.length === 0
-        ? "Add at least one outlet client name."
+        ? t("requests.addOutletName")
         : ticketTypes.length === 0
-          ? "The selected event or festival has no active ticket types."
+          ? t("requests.noActiveTicketTypes")
           : "";
 
   function addOutletName() {
@@ -87,15 +90,12 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
       formElement.reset();
       outletIdCounter.current = 1;
       setOutletRows([{ id: "outlet-1", name: "", quantity: 1 }]);
-      const successMessage =
-        validOutletRows.length > 1
-          ? `${validOutletRows.length} requests were sent to the manager for review.`
-          : "Your request was sent to the manager for review.";
+      const successMessage = validOutletRows.length > 1 ? t("requests.multipleSent", { count: validOutletRows.length }) : t("requests.oneSent");
       setSubmittedMessage(successMessage);
       notify(successMessage);
       await onDone();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to submit the request.";
+      const message = error instanceof Error ? error.message : t("requests.unableToSubmit");
       setFormError(message);
       notify(message, "bad");
     } finally {
@@ -106,41 +106,41 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
   return (
     <form onSubmit={submit} className="max-w-5xl overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
       <PanelIntro
-        eyebrow="New request"
-        title="Request sponsorship tickets"
-        description="Fill in the details below. A manager will review and respond."
+        eyebrow={t("requests.newRequest")}
+        title={t("requests.requestTickets")}
+        description={t("requests.requestDescription")}
       />
       <div className="space-y-0 px-5 pb-5">
-      <Step title="1. Event or festival">
+      <Step title={t("requests.step1")}>
         <div className="grid gap-3">
-          <Field label="Select the event or festival">
+          <Field label={t("requests.selectEvent")}>
             <select name="eventId" className={inputClass} value={effectiveEventId} onChange={(event) => setEventId(event.target.value)} required disabled={published.length === 0}>
-              {published.map((event) => <option key={event._id} value={event._id}>{event.name}{event.eventKind === "festival" ? " (Festival)" : ""}</option>)}
+              {published.map((event) => <option key={event._id} value={event._id}>{event.name}{event.eventKind === "festival" ? t("requests.festivalSuffix") : ""}</option>)}
             </select>
           </Field>
           {selectedEvent && (
             <div className="space-y-1 rounded-md bg-stone-100 p-3 text-sm text-stone-700">
-              <p>Up to <strong>{selectedEvent.maxTicketsPerOutlet}</strong> ticket{selectedEvent.maxTicketsPerOutlet === 1 ? "" : "s"} per outlet.</p>
+              <p>{t("requests.upToTickets", { count: selectedEvent.maxTicketsPerOutlet, plural: selectedEvent.maxTicketsPerOutlet === 1 ? "" : "s" })}</p>
             </div>
           )}
         </div>
       </Step>
 
-      <Step title="2. Outlet clients">
-        <div className="grid gap-3" aria-label="Outlet clients">
+      <Step title={t("requests.step2")}>
+        <div className="grid gap-3" aria-label={t("requests.step2")}>
           {outletRows.map((outlet, index) => (
             <div key={outlet.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
-              <Field label={index === 0 ? "Client name" : `Client name ${index + 1}`}>
+              <Field label={index === 0 ? t("requests.clientName") : t("requests.clientNameN", { index: index + 1 })}>
                 <input
                   value={outlet.name}
                   onChange={(event) => updateOutletName(outlet.id, event.target.value)}
                   autoFocus={index === 0}
-                  placeholder="e.g. The Rooftop Bar"
+                  placeholder={t("requests.clientNamePlaceholder")}
                   className={inputClass}
                   required={index === 0}
                 />
               </Field>
-              <Field label="Quantity">
+              <Field label={t("requests.quantity")}>
                 <input
                   value={outlet.quantity}
                   onChange={(event) => updateOutletQuantity(outlet.id, Number(event.target.value))}
@@ -156,8 +156,8 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
                   <ActionButton
                     type="button"
                     variant="secondary"
-                    aria-label={`Remove outlet client ${index + 1}`}
-                    title="Remove outlet"
+                    aria-label={t("requests.removeOutletClient", { index: index + 1 })}
+                    title={t("requests.removeOutlet")}
                     className="aspect-square min-h-9 w-9 px-0"
                     onClick={() => removeOutletName(outlet.id)}
                   >
@@ -168,8 +168,8 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
                   <ActionButton
                     type="button"
                     variant="ghost"
-                    aria-label="Add another outlet client"
-                    title="Add outlet"
+                    aria-label={t("requests.addAnotherOutletClient")}
+                    title={t("requests.addOutlet")}
                     className="aspect-square min-h-9 w-9 px-0"
                     onClick={addOutletName}
                   >
@@ -182,9 +182,9 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
         </div>
       </Step>
 
-      <Step title="3. Tickets">
+      <Step title={t("requests.step3")}>
         <div className="grid gap-3">
-          <Field label="Ticket type">
+          <Field label={t("requests.ticketType")}>
             <select name="ticketType" className={inputClass} disabled={ticketTypes.length === 0}>
               {ticketTypes.map((type) => <option key={type.name} value={type.name}>{type.name}</option>)}
             </select>
@@ -192,16 +192,16 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
         </div>
       </Step>
 
-      <Step title="4. Recipients and notes">
+      <Step title={t("requests.step4")}>
         <div className="grid gap-3">
-          <Field label="Recipient emails" hint="Separate multiple addresses with commas. A manager can edit these later.">
-            <input name="recipientEmails" type="text" inputMode="email" required placeholder="client@outlet.com, manager@agency.com" className={inputClass} />
+          <Field label={t("requests.recipientEmails")} hint={t("requests.recipientEmailsHint")}>
+            <input name="recipientEmails" type="text" inputMode="email" required placeholder={t("requests.recipientEmailsPlaceholder")} className={inputClass} />
           </Field>
-          <Field label="Notes"><textarea name="notes" className={inputClass} rows={4} /></Field>
+          <Field label={t("requests.notes")}><textarea name="notes" className={inputClass} rows={4} /></Field>
         </div>
       </Step>
 
-      <Step title="5. Review">
+      <Step title={t("requests.step5")}>
         <div className="grid gap-3">
           {blockedReason && <Notice message={blockedReason} tone="bad" />}
           {formError && <Notice message={formError} tone="bad" />}
@@ -211,7 +211,7 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
                 <CheckCircle2 className="mt-0.5 shrink-0" size={18} />
                 <div className="grid gap-3">
                   <div>
-                    <p className="font-semibold">Request sent</p>
+                    <p className="font-semibold">{t("requests.requestSent")}</p>
                     <p className="mt-1">{submittedMessage}</p>
                   </div>
                   <ActionButton
@@ -224,13 +224,13 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
                     }}
                   >
                     <Plus size={16} />
-                    Send another request
+                    {t("requests.sendAnother")}
                   </ActionButton>
                 </div>
               </div>
             </div>
           )}
-          {!submittedMessage && <ActionButton disabled={Boolean(blockedReason) || submitting}>{submitting ? "Submitting request..." : "Submit request"}</ActionButton>}
+          {!submittedMessage && <ActionButton disabled={Boolean(blockedReason) || submitting}>{submitting ? t("requests.submitting") : t("requests.submit")}</ActionButton>}
         </div>
       </Step>
       </div>
@@ -258,6 +258,7 @@ export function AdminRequests({
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
+  const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("all");
   const [outletFilter, setOutletFilter] = useState("all");
@@ -337,55 +338,53 @@ export function AdminRequests({
       {quickFilter !== "attention" && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 shadow-sm">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">Request filter</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">{t("requests.requestFilter")}</p>
             <p className="text-sm font-medium text-stone-900">{requestQuickFilterLabel(quickFilter)}</p>
           </div>
-          <ActionButton type="button" variant="secondary" onClick={onClearQuickFilter}>Back to attention</ActionButton>
+          <ActionButton type="button" variant="secondary" onClick={onClearQuickFilter}>{t("requests.backToAttention")}</ActionButton>
         </div>
       )}
       <div className="grid gap-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Status">
+        <Field label={t("requests.status")}>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}>
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="partially_approved">Partially approved</option>
-            <option value="rejected">Rejected</option>
+            <option value="all">{t("requests.allStatuses")}</option>
+            <option value="pending">{t("requests.pending")}</option>
+            <option value="approved">{t("requests.approvedStatus")}</option>
+            <option value="partially_approved">{t("requests.partiallyApproved")}</option>
+            <option value="rejected">{t("requests.rejectedStatus")}</option>
           </select>
         </Field>
-        <Field label="Event or festival">
+        <Field label={t("requests.eventOrFestival")}>
           <select value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} className={inputClass}>
-            <option value="all">All events and festivals</option>
-            {events.map((event) => <option key={event._id} value={event._id}>{event.name}{event.eventKind === "festival" ? " (Festival)" : ""}</option>)}
+            <option value="all">{t("requests.allEventsFestivals")}</option>
+            {events.map((event) => <option key={event._id} value={event._id}>{event.name}{event.eventKind === "festival" ? t("requests.festivalSuffix") : ""}</option>)}
           </select>
         </Field>
-        <Field label="Outlet">
+        <Field label={t("requests.outlet")}>
           <select value={outletFilter} onChange={(event) => setOutletFilter(event.target.value)} className={inputClass}>
-            <option value="all">All outlets</option>
+            <option value="all">{t("requests.allOutlets")}</option>
             {outlets.map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name}</option>)}
           </select>
         </Field>
-        <Field label="Account manager">
-          <input value={managerFilter} onChange={(event) => setManagerFilter(event.target.value)} className={inputClass} placeholder="Search name or email" />
+        <Field label={t("requests.accountManager")}>
+          <input value={managerFilter} onChange={(event) => setManagerFilter(event.target.value)} className={inputClass} placeholder={t("requests.searchNameEmail")} />
         </Field>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-4 py-3 text-sm text-stone-600 shadow-sm">
-        <span>
-          Showing <strong className="text-stone-950">{visibleRequests.length}</strong> of <strong className="text-stone-950">{filtered.length}</strong> matching requests.
-        </span>
-        {quickFilter === "attention" && <span className="text-xs uppercase tracking-[0.12em] text-[#EB6A1C]">Operational queue</span>}
+        <span>{t("requests.showing", { visible: visibleRequests.length, total: filtered.length })}</span>
+        {quickFilter === "attention" && <span className="text-xs uppercase tracking-[0.12em] text-[#EB6A1C]">{t("requests.operationalQueue")}</span>}
       </div>
 
       {visibleRequests.map((request) => <RequestCard key={request._id} request={request} onDone={onDone} notify={notify} />)}
       {hiddenCount > 0 && (
         <div className="flex justify-center">
           <ActionButton type="button" variant="secondary" onClick={() => setVisibleState({ key: filterKey, count: visibleCount + INITIAL_VISIBLE_REQUESTS })}>
-            Show {Math.min(INITIAL_VISIBLE_REQUESTS, hiddenCount)} more
+            {t("requests.showMore", { count: Math.min(INITIAL_VISIBLE_REQUESTS, hiddenCount) })}
           </ActionButton>
         </div>
       )}
-      {filtered.length === 0 && <EmptyState text={quickFilter === "attention" ? "No requests need attention right now." : "No requests match the current filters."} />}
+      {filtered.length === 0 && <EmptyState text={quickFilter === "attention" ? t("requests.noneNeedAttention") : t("requests.noneMatch")} />}
     </div>
   );
 }
@@ -402,12 +401,13 @@ export function SendTicketPanel({
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
+  const { t } = useTranslation();
   const { data: session } = useSession();
   const [showSendWindow, setShowSendWindow] = useState(false);
   const [recording, setRecording] = useState(false);
   const [draftRecipients, setDraftRecipients] = useState(request.recipientEmails.join(", "));
-  const [draftSubject, setDraftSubject] = useState(`Bacardi tickets for ${request.event?.name}`);
-  const [draftMessage, setDraftMessage] = useState(`Hi,\n\nPlease find the approved ticket files attached for ${request.event?.name}.\n\nBest regards,\n${session?.user?.name || ""}`);
+  const [draftSubject, setDraftSubject] = useState(t("requests.emailSubject", { event: request.event?.name || "" }));
+  const [draftMessage, setDraftMessage] = useState(t("requests.emailBody", { event: request.event?.name || "", name: session?.user?.name || "" }));
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
   const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
   const preferredEmailApp = session?.user?.preferredEmailApp || "default";
@@ -429,18 +429,18 @@ export function SendTicketPanel({
     if (!retrySeed) return;
     const timer = window.setTimeout(() => {
       setDraftRecipients(retrySeed.recipients);
-      setDraftSubject(`Retry: Bacardi tickets for ${request.event?.name}`);
-      setDraftMessage(`Hi,\n\nPlease find the approved ticket files attached for ${request.event?.name}. This retries a previous dispatch.\n\nBest regards,\n${session?.user?.name || ""}`);
+      setDraftSubject(t("requests.retrySubject", { event: request.event?.name || "" }));
+      setDraftMessage(t("requests.retryEmailBody", { event: request.event?.name || "", name: session?.user?.name || "" }));
       setShowSendWindow(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [request.event?.name, retrySeed, session?.user?.name]);
+  }, [request.event?.name, retrySeed, session?.user?.name, t]);
 
   async function openEmailDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canSendTickets) return notify("Approve or partially approve the request before sending ticket files.", "bad");
+    if (!canSendTickets) return notify(t("requests.approveFirst"), "bad");
     const recipientList = splitEmails(draftRecipients);
-    if (recipientList.length === 0) return notify("Add at least one recipient email before sending tickets.", "bad");
+    if (recipientList.length === 0) return notify(t("requests.addRecipient"), "bad");
     const url = buildEmailDraftUrl(preferredEmailApp, recipientList, draftSubject, draftMessage);
     window.open(url, "_blank", "noopener,noreferrer");
     setRecording(true);
@@ -450,10 +450,10 @@ export function SendTicketPanel({
         body: JSON.stringify({ recipients: recipientList, subject: draftSubject, message: draftMessage, mailtoUrl: url }),
       });
       setShowSendWindow(false);
-      notify("Email draft opened. Attach the ticket files from your official mailbox, then send.");
+      notify(t("requests.draftOpenedNotice"));
       await onDone();
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to record the manual dispatch.", "bad");
+      notify(error instanceof Error ? error.message : t("requests.unableToRecordDispatch"), "bad");
     } finally {
       setRecording(false);
     }
@@ -463,24 +463,24 @@ export function SendTicketPanel({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 p-3">
         <div>
-          <h4 className="text-sm font-semibold">Ticket files</h4>
+          <h4 className="text-sm font-semibold">{t("requests.ticketFiles")}</h4>
           <p className="text-sm text-stone-600">
             {canSendTickets
-              ? `${approvedTotal || "Approved"} ticket${approvedTotal === 1 ? "" : "s"} ready to dispatch by email.`
-              : "Approve or partially approve this request first, then open an email draft."}
+              ? t("requests.readyToDispatch", { count: approvedTotal || t("requests.approvedStatus"), plural: approvedTotal === 1 ? "" : "s" })
+              : t("requests.approveFirstShort")}
           </p>
           {dispatchSummary.total > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
-              {dispatchSummary.manual > 0 && <Badge tone="good">{dispatchSummary.manual} manual</Badge>}
-              {dispatchSummary.sent > 0 && <Badge tone="good">{dispatchSummary.sent} sent</Badge>}
-              {dispatchSummary.simulated > 0 && <Badge tone="neutral">{dispatchSummary.simulated} simulated</Badge>}
-              {dispatchSummary.failed > 0 && <Badge tone="bad">{dispatchSummary.failed} failed</Badge>}
-              {dispatchSummary.skipped > 0 && <Badge tone="warn">{dispatchSummary.skipped} skipped</Badge>}
+              {dispatchSummary.manual > 0 && <Badge tone="good">{t("requests.manual", { count: dispatchSummary.manual })}</Badge>}
+              {dispatchSummary.sent > 0 && <Badge tone="good">{t("requests.sent", { count: dispatchSummary.sent })}</Badge>}
+              {dispatchSummary.simulated > 0 && <Badge tone="neutral">{t("requests.simulated", { count: dispatchSummary.simulated })}</Badge>}
+              {dispatchSummary.failed > 0 && <Badge tone="bad">{t("requests.failed", { count: dispatchSummary.failed })}</Badge>}
+              {dispatchSummary.skipped > 0 && <Badge tone="warn">{t("requests.skipped", { count: dispatchSummary.skipped })}</Badge>}
             </div>
           )}
         </div>
         <ActionButton type="button" disabled={!canSendTickets} onClick={() => setShowSendWindow(true)}>
-          <Mail size={16} /> Open email draft
+          <Mail size={16} /> {t("requests.openEmailDraft")}
         </ActionButton>
       </div>
 
@@ -489,7 +489,7 @@ export function SendTicketPanel({
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Official mailbox draft</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("requests.officialMailboxDraft")}</p>
                 <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
               </div>
               <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
@@ -498,23 +498,23 @@ export function SendTicketPanel({
             </div>
             <form onSubmit={openEmailDraft} className="mt-4 grid gap-3">
               <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">
-                <p className="font-semibold">Send from your official mailbox</p>
-                <p className="mt-1">This opens your chosen email app. Attach the ticket files there, then send from {officialEmail || "your official email"}.</p>
+                <p className="font-semibold">{t("requests.sendFromOfficial")}</p>
+                <p className="mt-1">{t("requests.sendFromOfficialDescription", { email: officialEmail || t("requests.yourOfficialEmail") })}</p>
               </div>
-              <Field label="Email recipients" hint="Send to anyone - separate multiple addresses with a comma.">
+              <Field label={t("requests.emailRecipients")} hint={t("requests.emailRecipientsHint")}>
                 <input name="recipients" required value={draftRecipients} onChange={(event) => setDraftRecipients(event.target.value)} className={inputClass} />
               </Field>
-              <Field label="Subject">
+              <Field label={t("requests.subject")}>
                 <input name="subject" required value={draftSubject} onChange={(event) => setDraftSubject(event.target.value)} className={inputClass} />
               </Field>
-              <Field label="Message body">
+              <Field label={t("requests.messageBody")}>
                 <textarea name="message" required value={draftMessage} onChange={(event) => setDraftMessage(event.target.value)} className={inputClass} rows={4} />
               </Field>
               <div className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">
-                <p className="font-semibold">Attachments</p>
-                <p className="mt-1">The browser cannot attach local files automatically. Add the ticket files inside Outlook or Gmail before sending.</p>
+                <p className="font-semibold">{t("requests.attachments")}</p>
+                <p className="mt-1">{t("requests.attachmentsNote")}</p>
               </div>
-              <ActionButton disabled={!canSendTickets || recording}><Mail size={16} /> {recording ? "Opening..." : "Open email draft"}</ActionButton>
+              <ActionButton disabled={!canSendTickets || recording}><Mail size={16} /> {recording ? t("requests.opening") : t("requests.openEmailDraft")}</ActionButton>
             </form>
           </div>
         </div>
@@ -525,6 +525,8 @@ export function SendTicketPanel({
 
 
 export function RequestCard({ request, onDone, notify }: { request: TicketRequest; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const [status, setStatus] = useState<RequestStatus>(request.status);
   const [adminNotes, setAdminNotes] = useState(request.adminNotes || "");
   const [recipients, setRecipients] = useState(request.recipientEmails.join(", "));
@@ -558,10 +560,10 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
           })),
         }),
       });
-      notify(nextStatus === "approved" ? "Request approved." : "Request rejected.");
+      notify(nextStatus === "approved" ? t("requests.approved") : t("requests.rejected"));
       await onDone();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to update the request.";
+      const message = error instanceof Error ? error.message : t("requests.unableToUpdate");
       notify(message, "bad");
     } finally {
       setQuickAction("");
@@ -578,7 +580,7 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
     });
     const approvedTotal = nextItems.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
     if (status === "partially_approved" && (approvedTotal <= 0 || approvedTotal >= requestedTotal)) {
-      return notify("Partial approval must approve at least one ticket but less than requested.", "bad");
+      return notify(t("requests.partialApprovalError"), "bad");
     }
     setUpdating(true);
     setActionError("");
@@ -592,10 +594,10 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
           items: nextItems,
         }),
       });
-      notify("Request updated.");
+      notify(t("requests.updated"));
       await onDone();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to update the request.";
+      const message = error instanceof Error ? error.message : t("requests.unableToUpdate");
       setActionError(message);
       notify(message, "bad");
     } finally {
@@ -615,7 +617,7 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
       <summary className="grid cursor-pointer list-none gap-3 px-4 py-3 lg:grid-cols-[minmax(260px,1.2fr)_minmax(360px,0.95fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+            <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status, t)}</Badge>
             <h3 className="min-w-0 truncate text-base font-semibold">{request.event?.name}</h3>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-stone-800">{request.outlet?.name}</p>
@@ -624,10 +626,10 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
           </p>
         </div>
         <div className="grid grid-cols-4 gap-2">
-          <CompactRequestMetric label="Req" value={requestedTotal} />
-          <CompactRequestMetric label="Appr" value={approvedTotal} tone={approvedTotal > 0 ? "good" : "neutral"} />
-          <CompactRequestMetric label="To" value={request.recipientEmails.length} />
-          <CompactRequestMetric label="Sent" value={dispatchCount} tone={dispatchCount > 0 ? "good" : "neutral"} />
+          <CompactRequestMetric label={t("requests.req")} value={requestedTotal} />
+          <CompactRequestMetric label={t("requests.appr")} value={approvedTotal} tone={approvedTotal > 0 ? "good" : "neutral"} />
+          <CompactRequestMetric label={t("requests.to")} value={request.recipientEmails.length} />
+          <CompactRequestMetric label={t("requests.sentShort")} value={dispatchCount} tone={dispatchCount > 0 ? "good" : "neutral"} />
         </div>
         <div className="flex items-center justify-between gap-2 lg:justify-end">
           {request.status === "pending" && (
@@ -643,7 +645,7 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
                   void quickDecision("approved");
                 }}
               >
-                <CheckCircle2 size={14} /> {quickAction === "approved" ? "Approving..." : "Approve"}
+                <CheckCircle2 size={14} /> {quickAction === "approved" ? t("requests.approving") : t("requests.approve")}
               </ActionButton>
               <ActionButton
                 type="button"
@@ -656,11 +658,11 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
                   void quickDecision("rejected");
                 }}
               >
-                <XCircle size={14} /> {quickAction === "rejected" ? "Rejecting..." : "Reject"}
+                <XCircle size={14} /> {quickAction === "rejected" ? t("requests.rejecting") : t("requests.reject")}
               </ActionButton>
             </div>
           )}
-          <span className="whitespace-nowrap text-sm text-stone-500">{formatShortDate(request.createdAt)}</span>
+          <span className="whitespace-nowrap text-sm text-stone-500">{formatShortDate(request.createdAt, locale)}</span>
           <ChevronDown size={18} className="text-stone-400 transition group-open:rotate-180" />
         </div>
       </summary>
@@ -668,27 +670,27 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
       <div className="grid gap-4 border-t border-stone-200 p-4">
         {actionError && <Notice message={actionError} tone="bad" />}
         <div className="grid gap-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700 lg:grid-cols-3">
-          <RequestInfo label="Ticket types" value={request.items.map((item) => `${item.ticketType} x${item.quantity}`).join(", ")} />
-          <RequestInfo label="Recipients" value={request.recipientEmails.join(", ") || "No recipients"} />
-          <RequestInfo label="Created" value={formatDate(request.createdAt)} />
+          <RequestInfo label={t("requests.ticketTypes")} value={request.items.map((item) => `${item.ticketType} x${item.quantity}`).join(", ")} />
+          <RequestInfo label={t("requests.recipients")} value={request.recipientEmails.join(", ") || t("requests.noRecipients")} />
+          <RequestInfo label={t("requests.created")} value={formatDate(request.createdAt, locale)} />
         </div>
         {request.notes && (
           <section className="rounded-md border border-stone-200 bg-white p-3">
-            <h4 className="text-sm font-semibold">Account manager notes</h4>
+            <h4 className="text-sm font-semibold">{t("requests.managerNotes")}</h4>
             <p className="mt-2 text-sm text-stone-700">{request.notes}</p>
           </section>
         )}
 
         <section className="rounded-md border border-stone-200 bg-stone-50 p-3">
-          <h4 className="text-sm font-semibold">Approval quantities</h4>
+          <h4 className="text-sm font-semibold">{t("requests.approvalQuantities")}</h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {request.items.map((item, index) => (
               <div key={`${item.ticketType}-${index}`} className="grid gap-2 rounded-md border border-stone-200 bg-white p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{item.ticketType}</span>
-                  <Badge>Requested x{item.quantity}</Badge>
+                  <Badge>{t("requests.requestedX", { count: item.quantity })}</Badge>
                 </div>
-                <Field label="Approved quantity">
+                <Field label={t("requests.approvedQuantity")}>
                   <input
                     className={inputClass}
                     type="number"
@@ -710,21 +712,21 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
         </section>
 
         <div className="grid items-end gap-3 lg:grid-cols-[180px_1fr_1fr_auto]">
-          <Field label="Status">
+          <Field label={t("requests.status")}>
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value as RequestStatus)}>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="partially_approved">Partially approved</option>
-              <option value="rejected">Rejected</option>
+              <option value="pending">{t("requests.pending")}</option>
+              <option value="approved">{t("requests.approvedStatus")}</option>
+              <option value="partially_approved">{t("requests.partiallyApproved")}</option>
+              <option value="rejected">{t("requests.rejectedStatus")}</option>
             </select>
           </Field>
-          <Field label="Ticket recipient emails">
+          <Field label={t("requests.ticketRecipientEmails")}>
             <input className={inputClass} value={recipients} onChange={(event) => setRecipients(event.target.value)} />
           </Field>
-          <Field label="Admin notes">
+          <Field label={t("requests.adminNotes")}>
             <input className={inputClass} value={adminNotes} onChange={(event) => setAdminNotes(event.target.value)} />
           </Field>
-          <ActionButton variant="secondary" disabled={updating} onClick={update}>{updating ? "Saving..." : "Save"}</ActionButton>
+          <ActionButton variant="secondary" disabled={updating} onClick={update}>{updating ? t("requests.saving") : t("requests.save")}</ActionButton>
         </div>
 
         <SendTicketPanel request={request} retrySeed={retrySeed} onDone={onDone} notify={notify} />
@@ -743,18 +745,20 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
 
 
 export function HistoryList({ history }: { history: TicketRequest["history"] }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   return (
     <section className="rounded-md border border-stone-200 p-3">
-      <h4 className="text-sm font-semibold">Request history</h4>
+      <h4 className="text-sm font-semibold">{t("requests.requestHistory")}</h4>
       <div className="mt-3 space-y-3">
         {history.map((item, index) => (
           <div key={`${item.at}-${index}`} className="text-sm">
             <p className="font-medium">{renderHistoryAction(item.action)}</p>
             <p className="text-stone-600">{renderHistoryMessage(item.message)} - {item.by}</p>
-            <p className="text-xs text-stone-500">{formatDate(item.at)}</p>
+            <p className="text-xs text-stone-500">{formatDate(item.at, locale)}</p>
           </div>
         ))}
-        {history.length === 0 && <p className="text-sm text-stone-500">No history yet.</p>}
+        {history.length === 0 && <p className="text-sm text-stone-500">{t("requests.noHistoryYet")}</p>}
       </div>
     </section>
   );
@@ -768,9 +772,11 @@ export function DispatchList({
   dispatches: TicketRequest["dispatches"];
   onRetry?: (dispatch: TicketRequest["dispatches"][number]) => void;
 }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   return (
     <section className="rounded-md border border-stone-200 p-3">
-      <h4 className="text-sm font-semibold">Ticket dispatches</h4>
+      <h4 className="text-sm font-semibold">{t("requests.ticketDispatches")}</h4>
       <div className="mt-3 space-y-3">
         {dispatches.map((dispatch, index) => (
           <div key={`${dispatch.at}-${index}`} className={`rounded-md border p-3 text-sm ${dispatch.status === "failed" ? "border-red-200 bg-red-50" : "border-stone-100 bg-stone-50"}`}>
@@ -780,21 +786,21 @@ export function DispatchList({
               </p>
               <Badge tone={dispatchTone(dispatch.status)}>{dispatchLabel(dispatch.status)}</Badge>
             </div>
-            <p className="mt-1 text-stone-600">{dispatch.fileNames.join(", ") || "No file names recorded"}</p>
-            <p className="mt-1 text-xs text-stone-500">{formatDate(dispatch.at)}</p>
+            <p className="mt-1 text-stone-600">{dispatch.fileNames.join(", ") || t("requests.noFileNames")}</p>
+            <p className="mt-1 text-xs text-stone-500">{formatDate(dispatch.at, locale)}</p>
             {dispatch.status === "failed" && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-white/70 p-2">
-                <p className="text-xs text-red-800">This email did not reach the recipients. Attach the files again and retry manually.</p>
+                <p className="text-xs text-red-800">{t("requests.failedDeliveryNote")}</p>
                 {onRetry && (
                   <ActionButton type="button" variant="secondary" className="min-h-8 px-2" onClick={() => onRetry(dispatch)}>
-                    <RefreshCcw size={14} /> Retry
+                    <RefreshCcw size={14} /> {t("requests.retry")}
                   </ActionButton>
                 )}
               </div>
             )}
           </div>
         ))}
-        {dispatches.length === 0 && <p className="text-sm text-stone-500">No ticket dispatches have been recorded.</p>}
+        {dispatches.length === 0 && <p className="text-sm text-stone-500">{t("requests.noDispatches")}</p>}
       </div>
     </section>
   );
@@ -802,11 +808,12 @@ export function DispatchList({
 
 
 export function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+  const { t } = useTranslation();
   const nextStep = (request: TicketRequest) => {
-    if (request.status === "pending") return "Next: a manager reviews the outlet, quantities, recipients, and notes.";
-    if (request.status === "approved") return request.dispatches.length > 0 ? "Tickets have been dispatched by email." : "Approved: you or the manager can now open an email draft and attach ticket files.";
-    if (request.status === "partially_approved") return request.dispatches.length > 0 ? "Partially approved tickets have been dispatched by email." : "Partially approved: open an email draft and attach the available tickets.";
-    return "Rejected: review the manager note before creating a corrected request.";
+    if (request.status === "pending") return t("requests.nextPending");
+    if (request.status === "approved") return request.dispatches.length > 0 ? t("requests.dispatchedByEmail") : t("requests.approvedOpenDraft");
+    if (request.status === "partially_approved") return request.dispatches.length > 0 ? t("requests.partialDispatched") : t("requests.partialOpenDraft");
+    return t("requests.rejectedReviewNote");
   };
 
   return (
@@ -818,7 +825,7 @@ export function MinePanel({ requests, onDone, notify }: { requests: TicketReques
               <h3 className="font-semibold">{request.event?.name}</h3>
               <p className="text-sm text-stone-600">{request.outlet?.name}</p>
             </div>
-            <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status)}</Badge>
+            <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status, t)}</Badge>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">{request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}</div>
           {request.adminNotes && <p className="mt-3 rounded-md bg-stone-100 p-3 text-sm">{request.adminNotes}</p>}
@@ -828,9 +835,7 @@ export function MinePanel({ requests, onDone, notify }: { requests: TicketReques
           </div>
         </article>
       ))}
-      {requests.length === 0 && <EmptyState text="You have not created any requests yet." />}
+      {requests.length === 0 && <EmptyState text={t("requests.noRequestsYet")} />}
     </div>
   );
 }
-
-
