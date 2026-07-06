@@ -296,7 +296,7 @@ test("personas can create events, outlets, and requests from dashboard forms", a
   await seedTestUser(adminEmail, "super_admin");
   await seedTestUser(managerEmail, "account_manager");
   await signInAs(adminEmail);
-  await expect(page.getByText("Run the workspace cockpit: requests, events, users, reporting, email status, and audit visibility.")).toBeVisible();
+  await expect(page.getByText("Run the workspace cockpit: requests, events, users, reporting, notifications, and audit visibility.")).toBeVisible();
   await clickNav(page, "Events & festivals");
   const eventForm = page.locator("form").filter({ has: page.getByRole("heading", { name: "New event or festival" }) });
   await eventForm.locator('[name="name"]').fill(eventName);

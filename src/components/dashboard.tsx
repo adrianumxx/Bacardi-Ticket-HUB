@@ -60,7 +60,7 @@ function roleLabel(role?: Role) {
 }
 
 function roleDescription(role?: Role) {
-  if (role === "super_admin") return "Can control users, email status, audit, platform governance, and all operational workflows.";
+  if (role === "super_admin") return "Can control users, audit, platform governance, and all operational workflows.";
   if (role === "workspace_manager") return "Can manage daily operations: requests, events, outlets, reports, approvals, and ticket dispatch.";
   if (role === "account_manager") return "Can create ticket requests and follow their approval and dispatch status.";
   return "Role permissions are not available.";
@@ -165,15 +165,6 @@ type AdminUserRow = {
   accessEnabled?: boolean;
   source?: string;
   managerEmail?: string;
-};
-
-type MailHealthStatus = {
-  status: "ready" | "missing_api_key" | "invalid_sender" | "sender_not_verified" | "send_failed";
-  tone: Tone;
-  label: string;
-  message: string;
-  from: string;
-  hasApiKey: boolean;
 };
 
 type EmailDeliveryStatus = "sent" | "manual" | "simulated" | "failed" | "skipped" | "delivered" | "bounced" | "opened" | "clicked" | "complained" | "delivery_delayed";
@@ -833,7 +824,6 @@ export function Dashboard() {
     profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   }>({ allowedUsers: [], profiles: [], accountRequests: [] });
-  const [mailStatus, setMailStatus] = useState<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -865,12 +855,8 @@ export function Dashboard() {
       setOutlets(outletData.outlets);
       setRequests(requestData.requests);
       if (isSuperAdmin(role)) {
-        const [userData, mailData] = await Promise.all([
-          api<typeof users>("/api/admin/users"),
-          api<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string }>("/api/mail/status"),
-        ]);
+        const userData = await api<typeof users>("/api/admin/users");
         setUsers(userData);
-        setMailStatus(mailData);
       }
       await loadNotifications();
     } catch (error) {
@@ -1255,7 +1241,7 @@ export function Dashboard() {
             </div>
             <p className="max-w-2xl text-sm leading-6 text-stone-600">
               {isWorkspaceManager(role)
-                ? "Run the workspace cockpit: requests, events, users, reporting, email status, and audit visibility."
+                ? "Run the workspace cockpit: requests, events, users, reporting, notifications, and audit visibility."
                 : "Create ticket requests and track approvals from one place."}
             </p>
           </div>
@@ -1293,7 +1279,7 @@ export function Dashboard() {
             />
           )}
           {currentTab === "events" && <EventsPanel events={events} onDone={refresh} notify={showNotice} />}
-          {currentTab === "users" && <UsersPanel users={users} mailStatus={mailStatus} onDone={refresh} notify={showNotice} />}
+          {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "audit" && <AuditPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
@@ -1828,7 +1814,6 @@ function EventsPanel({ events, onDone, notify }: { events: EventItem[]; onDone: 
 
 function UsersPanel({
   users,
-  mailStatus,
   onDone,
   notify,
 }: {
@@ -1837,7 +1822,6 @@ function UsersPanel({
     profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   };
-  mailStatus: { mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null;
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
@@ -1952,7 +1936,6 @@ function UsersPanel({
       </form>
       <div className="space-y-5">
         <UserAccessOverview stats={userStats} />
-        <EmailHealthCard status={mailStatus} />
         <AccessRequestQueue requests={users.accountRequests} onDone={onDone} notify={notify} />
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
           <Field label="Search users">
@@ -2128,7 +2111,7 @@ function RoleModelNotice() {
     <div className="rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 text-sm text-stone-700">
       <p className="font-semibold text-stone-950">Role model v2</p>
       <p className="mt-1 leading-6">
-        Super admins control governance, users, audit, and email status. Workspace managers run approvals, events, reports, and ticket dispatch.
+        Super admins control governance, users, audit, and access. Workspace managers run approvals, events, reports, and ticket dispatch.
       </p>
     </div>
   );
@@ -2146,43 +2129,6 @@ function CompactMetric({ label, value, tone = "neutral" }: { label: string; valu
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums text-stone-950">{value}</p>
     </div>
-  );
-}
-
-function EmailHealthCard({ status }: { status: { mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null }) {
-  const mail = status?.mail;
-  const tone = mail?.tone || "neutral";
-  const statusCopy = mail?.label || "Checking";
-  return (
-    <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Optional system email</p>
-          <h2 className="mt-1 text-lg font-semibold">Notification status</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
-            {mail?.message || "Ticket dispatch uses each user's official mailbox. This only affects optional system notification emails."}
-          </p>
-        </div>
-        <Badge tone={tone}>{statusCopy}</Badge>
-      </div>
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-        <div className="rounded-md bg-stone-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">API key</p>
-          <p className="mt-1 font-medium">{mail ? (mail.hasApiKey ? "Configured" : "Missing") : "-"}</p>
-        </div>
-        <div className="rounded-md bg-stone-50 p-3 sm:col-span-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">Sender</p>
-          <p className="mt-1 break-words font-medium">{mail?.from || "-"}</p>
-        </div>
-      </div>
-      {status?.lastError && (
-        <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-sm text-red-800">
-          <p className="font-semibold">Last failed delivery</p>
-          <p className="mt-1 break-words">{status.lastError}</p>
-          {status.lastErrorAt && <p className="mt-1 text-xs text-red-700">{formatDate(status.lastErrorAt)}</p>}
-        </div>
-      )}
-    </section>
   );
 }
 
