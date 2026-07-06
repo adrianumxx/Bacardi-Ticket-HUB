@@ -2744,6 +2744,11 @@ type FestivalSummary = {
   rows: ReportRow[];
 };
 
+type ReportFocus = {
+  kind: "event" | "outlet";
+  label: string;
+};
+
 const magnitudeRamp = ["#14b8a6", "#f59e0b", "#ef4444", "#6366f1", "#7A4A1C"];
 
 const statusChartColors: Record<string, string> = {
@@ -2765,18 +2770,36 @@ function rankedTotals(rows: ReportRow[], key: string, valueKey: "quantity" | "di
     .slice(0, limit);
 }
 
-function RankedBarChart({ title, subtitle, data, emptyText }: { title: string; subtitle: string; data: [string, number][]; emptyText: string }) {
+function RankedBarChart({
+  title,
+  subtitle,
+  data,
+  emptyText,
+  onSelect,
+}: {
+  title: string;
+  subtitle: string;
+  data: [string, number][];
+  emptyText: string;
+  onSelect?: (label: string) => void;
+}) {
   const max = Math.max(...data.map(([, value]) => value), 1);
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
+      {title && <h3 className="text-sm font-semibold">{title}</h3>}
+      {subtitle && <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>}
       {data.length === 0 ? (
         <div className="mt-4"><EmptyState text={emptyText} /></div>
       ) : (
         <div className="mt-4 space-y-2.5">
           {data.map(([label, value]) => (
-            <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+            <button
+              key={label}
+              type="button"
+              disabled={!onSelect}
+              onClick={onSelect ? () => onSelect(label) : undefined}
+              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md text-left transition enabled:hover:bg-stone-50 enabled:focus:outline-none enabled:focus:ring-2 enabled:focus:ring-[#EB6A1C]/30 disabled:cursor-default"
+            >
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-stone-700" title={label}>{label}</p>
                 <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
@@ -2787,7 +2810,7 @@ function RankedBarChart({ title, subtitle, data, emptyText }: { title: string; s
                 </div>
               </div>
               <span className="text-sm font-semibold tabular-nums text-stone-800">{value}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -2861,7 +2884,7 @@ function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
   );
 }
 
-function EventPerformanceChart({ rows }: { rows: ReportRow[] }) {
+function EventPerformanceChart({ rows, onSelectEvent }: { rows: ReportRow[]; onSelectEvent?: (event: string) => void }) {
   const data = rankedTotals(rows, "event", "quantity", 6);
   const max = Math.max(...data.map(([, value]) => value), 1);
   return (
@@ -2873,7 +2896,7 @@ function EventPerformanceChart({ rows }: { rows: ReportRow[] }) {
       ) : (
         <div className="mt-4 grid gap-3">
           {data.map(([label, value], index) => (
-            <div key={label} className="grid gap-1">
+            <button key={label} type="button" onClick={() => onSelectEvent?.(label)} className="grid gap-1 rounded-md text-left transition hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-[#EB6A1C]/30">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="truncate font-medium text-stone-700" title={label}>{label}</span>
                 <span className="font-semibold tabular-nums text-stone-950">{value}</span>
@@ -2889,7 +2912,7 @@ function EventPerformanceChart({ rows }: { rows: ReportRow[] }) {
                   {Math.round((value / max) * 100)}%
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -3144,6 +3167,43 @@ function TextMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function summarizeReportRows(rows: ReportRow[]) {
+  return rows.reduce(
+    (summary, row) => {
+      const status = String(row.status || "");
+      summary.requests += 1;
+      summary.tickets += Number(row.quantity || 0);
+      summary.approvedTickets += Number(row.approved || 0);
+      summary.dispatches += Number(row.dispatches || 0);
+      if (status === "Pending") summary.pending += 1;
+      if (status === "Approved" || status === "Partially approved") summary.approved += 1;
+      if (status === "Rejected") summary.rejected += 1;
+      const manager = String(row.accountManager || "").trim();
+      const outlet = String(row.outlet || "").trim();
+      const event = String(row.event || "").trim();
+      if (manager) summary.managers.add(manager);
+      if (outlet) summary.outlets.add(outlet);
+      if (event) summary.events.add(event);
+      const createdAt = String(row.createdAt || "");
+      if (createdAt && (!summary.latest || new Date(createdAt) > new Date(summary.latest))) summary.latest = createdAt;
+      return summary;
+    },
+    {
+      requests: 0,
+      tickets: 0,
+      approvedTickets: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      dispatches: 0,
+      managers: new Set<string>(),
+      outlets: new Set<string>(),
+      events: new Set<string>(),
+      latest: "",
+    },
+  );
+}
+
 function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; rows: ReportRow[]; onClose: () => void }) {
   const managerRows = useMemo(() => rows.filter((row) => String(row.accountManagerEmail || row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
   const summary = useMemo(() => buildManagerSummaries(managerRows)[0], [managerRows]);
@@ -3278,7 +3338,110 @@ function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; ro
   );
 }
 
-function AnalyticsSection({ rows, selectedManager, onSelectManager }: { rows: ReportRow[]; selectedManager: string | null; onSelectManager: (manager: string) => void }) {
+function ReportFocusPanel({ focus, rows, onClose }: { focus: ReportFocus; rows: ReportRow[]; onClose: () => void }) {
+  const focusRows = useMemo(
+    () => rows.filter((row) => String(row[focus.kind] || "").trim() === focus.label),
+    [focus, rows],
+  );
+  const summary = useMemo(() => summarizeReportRows(focusRows), [focusRows]);
+  const breakdownKey = focus.kind === "event" ? "accountManager" : "event";
+  const breakdownTitle = focus.kind === "event" ? "Account managers" : "Events and festivals";
+  const breakdown = useMemo(() => rankedTotals(focusRows, breakdownKey, "quantity", 8), [breakdownKey, focusRows]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[75]">
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close report detail" />
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-stone-200 bg-[#FFFCF6] shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{focus.kind === "event" ? "Event report" : "Outlet report"}</p>
+            <h2 className="mt-1 truncate text-xl font-semibold">{focus.label}</h2>
+            <p className="mt-1 text-sm text-stone-600">Detail from the current report filters.</p>
+          </div>
+          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+            <X size={18} />
+          </ActionButton>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InsightMetric label="Requests" value={summary.requests} detail="Rows in the current filters." />
+            <InsightMetric label="Tickets" value={summary.tickets} detail={`${summary.approvedTickets} approved ticket(s).`} tone="good" />
+            <InsightMetric label="Pending / rejected" value={`${summary.pending} / ${summary.rejected}`} detail="Open or declined requests." tone={summary.pending > 0 ? "warn" : "neutral"} />
+            <InsightMetric label="Dispatches" value={summary.dispatches} detail={`Latest ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
+          </div>
+          <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold">{breakdownTitle}</h3>
+            <ReportBreakdownList data={breakdown} emptyText="No breakdown data in the current filters." />
+          </section>
+          <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold">Request details</h3>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead className="border-b text-stone-600">
+                  <tr><th className="py-2">Date</th><th>Event/Festival</th><th>Outlet</th><th>Account manager</th><th>Status</th><th>Tickets</th><th>Dispatches</th></tr>
+                </thead>
+                <tbody className="divide-y">
+                  {focusRows.map((row) => (
+                    <tr key={String(row.id)}>
+                      <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt)) : "-"}</td>
+                      <td>{row.event}</td>
+                      <td>{row.outlet}</td>
+                      <td>{row.accountManager}</td>
+                      <td>{String(row.status)}</td>
+                      <td>{row.quantity}</td>
+                      <td>{row.dispatches}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function ReportBreakdownList({ data, emptyText }: { data: [string, number][]; emptyText: string }) {
+  const max = Math.max(...data.map(([, value]) => value), 1);
+  return data.length === 0 ? (
+    <div className="mt-4"><EmptyState text={emptyText} /></div>
+  ) : (
+    <div className="mt-4 space-y-2.5">
+      {data.map(([label, value]) => (
+        <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-stone-700" title={label}>{label}</p>
+            <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-stone-100">
+              <div className="h-full rounded-full bg-[#14b8a6]" style={{ width: `${Math.max(4, (value / max) * 100)}%` }} />
+            </div>
+          </div>
+          <span className="text-sm font-semibold tabular-nums text-stone-800">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnalyticsSection({
+  rows,
+  selectedManager,
+  onSelectManager,
+  onSelectFocus,
+}: {
+  rows: ReportRow[];
+  selectedManager: string | null;
+  onSelectManager: (manager: string) => void;
+  onSelectFocus: (focus: ReportFocus) => void;
+}) {
   const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const totalDispatches = rows.reduce((sum, row) => sum + Number(row.dispatches || 0), 0);
@@ -3313,17 +3476,19 @@ function AnalyticsSection({ rows, selectedManager, onSelectManager }: { rows: Re
           subtitle="Which clients are requesting the most tickets."
           data={rankedTotals(rows, "outlet")}
           emptyText="No outlet activity in the current filters."
+          onSelect={(label) => onSelectFocus({ kind: "outlet", label })}
         />
         <RankedBarChart
           title="Clients invited the most"
           subtitle="Outlets with the most ticket emails actually sent."
           data={rankedTotals(rows, "outlet", "dispatches")}
           emptyText="No ticket emails have been sent in the current filters."
+          onSelect={(label) => onSelectFocus({ kind: "outlet", label })}
         />
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_1.35fr]">
         <StatusBreakdownChart rows={rows} />
-        <EventPerformanceChart rows={rows} />
+        <EventPerformanceChart rows={rows} onSelectEvent={(label) => onSelectFocus({ kind: "event", label })} />
       </div>
       <ManagerActivityMatrix rows={rows} selectedManager={selectedManager} onSelectManager={onSelectManager} />
       <div className="grid gap-3 sm:grid-cols-3">
@@ -3342,6 +3507,7 @@ function ReportsPanel() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedManager, setSelectedManager] = useState<string | null>(null);
+  const [selectedFocus, setSelectedFocus] = useState<ReportFocus | null>(null);
   const [exportNotice, setExportNotice] = useState<{ message: string; tone: Tone } | null>(null);
   const [exporting, setExporting] = useState<"csv" | "pdf" | "">("");
   const [loadingReport, setLoadingReport] = useState(false);
@@ -3474,8 +3640,9 @@ function ReportsPanel() {
         {loadingReport && <p className="mt-3 text-sm text-stone-500">Loading report...</p>}
       </div>
 
-      <AnalyticsSection rows={filteredRows} selectedManager={selectedManager} onSelectManager={setSelectedManager} />
+      <AnalyticsSection rows={filteredRows} selectedManager={selectedManager} onSelectManager={setSelectedManager} onSelectFocus={setSelectedFocus} />
       {selectedManager && <ManagerDrilldownPanel manager={selectedManager} rows={filteredRows} onClose={() => setSelectedManager(null)} />}
+      {selectedFocus && <ReportFocusPanel focus={selectedFocus} rows={filteredRows} onClose={() => setSelectedFocus(null)} />}
 
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Request report</h2>
