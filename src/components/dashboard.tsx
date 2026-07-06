@@ -41,21 +41,27 @@ import {
 } from "@/lib/labels";
 import { formatDate, formatShortDate, splitEmails } from "@/lib/utils";
 
-type Role = "super_admin" | "account_manager";
+type Role = "super_admin" | "workspace_manager" | "account_manager";
 type Tone = "neutral" | "good" | "warn" | "bad";
 
-function isWorkspaceManager(role?: Role) {
+function isSuperAdmin(role?: Role) {
   return role === "super_admin";
 }
 
+function isWorkspaceManager(role?: Role) {
+  return role === "super_admin" || role === "workspace_manager";
+}
+
 function roleLabel(role?: Role) {
-  if (role === "super_admin") return "Workspace manager";
+  if (role === "super_admin") return "Super admin";
+  if (role === "workspace_manager") return "Workspace manager";
   if (role === "account_manager") return "Account manager";
   return "Unknown role";
 }
 
 function roleDescription(role?: Role) {
-  if (role === "super_admin") return "Can manage the workspace, users, approvals, reports, email status, and audit visibility.";
+  if (role === "super_admin") return "Can control users, email status, audit, platform governance, and all operational workflows.";
+  if (role === "workspace_manager") return "Can manage daily operations: requests, events, outlets, reports, approvals, and ticket dispatch.";
   if (role === "account_manager") return "Can create ticket requests and follow their approval and dispatch status.";
   return "Role permissions are not available.";
 }
@@ -850,7 +856,7 @@ export function Dashboard() {
       setEvents(eventData.events);
       setOutlets(outletData.outlets);
       setRequests(requestData.requests);
-      if (isWorkspaceManager(role)) {
+      if (isSuperAdmin(role)) {
         const [userData, mailData] = await Promise.all([
           api<typeof users>("/api/admin/users"),
           api<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string }>("/api/mail/status"),
@@ -912,7 +918,7 @@ export function Dashboard() {
     () =>
       !role
         ? []
-        : isWorkspaceManager(role)
+        : isSuperAdmin(role)
         ? [
             ["today", "Today", BarChart3],
             ["requests", "Requests", Ticket],
@@ -920,6 +926,14 @@ export function Dashboard() {
             ["users", "Users", Users],
             ["reports", "Reports", BarChart3],
             ["audit", "Audit", Clock],
+            ["settings", "Settings", Settings],
+          ]
+        : isWorkspaceManager(role)
+        ? [
+            ["today", "Today", BarChart3],
+            ["requests", "Requests", Ticket],
+            ["events", "Events & festivals", CalendarDays],
+            ["reports", "Reports", BarChart3],
             ["settings", "Settings", Settings],
           ]
         : [
@@ -1035,7 +1049,7 @@ export function Dashboard() {
           group: "Notifications",
           title: notification.title,
           detail: `${notification.category} · ${notification.emailStatus} · ${formatShortDate(notification.createdAt)}`,
-          tab: notification.category === "accounts" || notification.category === "users" ? "users" : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine",
+          tab: notification.category === "accounts" || notification.category === "users" ? (isSuperAdmin(role) ? "users" : isWorkspaceManager(role) ? "requests" : "mine") : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine",
         });
       }
     }
@@ -1147,7 +1161,7 @@ export function Dashboard() {
           onFilter={setNotificationFilter}
           onClose={() => setNotificationsOpen(false)}
           onOpenEntity={(category) => {
-            const target = category === "accounts" || category === "users" ? "users" : category === "events" || category === "outlets" ? "events" : category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine";
+            const target = category === "accounts" || category === "users" ? (isSuperAdmin(role) ? "users" : isWorkspaceManager(role) ? "requests" : "mine") : category === "events" || category === "outlets" ? "events" : category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine";
             openTab(target);
             setNotificationsOpen(false);
           }}
@@ -1898,7 +1912,8 @@ function UsersPanel({
     .sort((a, b) => a.email.localeCompare(b.email));
   const userStats = {
     total: combinedRows.length,
-    managers: combinedRows.filter((row) => isWorkspaceManager(row.role)).length,
+    superAdmins: combinedRows.filter((row) => row.role === "super_admin").length,
+    managers: combinedRows.filter((row) => row.role === "workspace_manager").length,
     accountManagers: combinedRows.filter((row) => row.role === "account_manager").length,
     blocked: combinedRows.filter((row) => row.status === "blocked").length,
     missingAccess: combinedRows.filter((row) => !row.accessEnabled).length,
@@ -1920,6 +1935,7 @@ function UsersPanel({
         <Field label="Role">
           <select name="role" className={inputClass}>
             <option value="account_manager">{roleLabel("account_manager")}</option>
+            <option value="workspace_manager">{roleLabel("workspace_manager")}</option>
             <option value="super_admin">{roleLabel("super_admin")}</option>
           </select>
         </Field>
@@ -2052,10 +2068,11 @@ function AuditPanel() {
   );
 }
 
-function UserAccessOverview({ stats }: { stats: { total: number; managers: number; accountManagers: number; blocked: number; missingAccess: number; unassigned: number } }) {
+function UserAccessOverview({ stats }: { stats: { total: number; superAdmins: number; managers: number; accountManagers: number; blocked: number; missingAccess: number; unassigned: number } }) {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
       <CompactMetric label="Users" value={stats.total} />
+      <CompactMetric label="Super admins" value={stats.superAdmins} />
       <CompactMetric label="Workspace managers" value={stats.managers} />
       <CompactMetric label="Account managers" value={stats.accountManagers} />
       <CompactMetric label="Unassigned" value={stats.unassigned} tone={stats.unassigned > 0 ? "warn" : "neutral"} />
@@ -2068,9 +2085,9 @@ function UserAccessOverview({ stats }: { stats: { total: number; managers: numbe
 function RoleModelNotice() {
   return (
     <div className="rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 text-sm text-stone-700">
-      <p className="font-semibold text-stone-950">Role model v2 ready</p>
+      <p className="font-semibold text-stone-950">Role model v2</p>
       <p className="mt-1 leading-6">
-        Workspace managers currently see the full workspace. A future Super admin layer can sit above this for critical configuration and governance.
+        Super admins control governance, users, audit, and email status. Workspace managers run approvals, events, reports, and ticket dispatch.
       </p>
     </div>
   );
@@ -2321,6 +2338,7 @@ function UserTable({
                   onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
                   options={[
                     { value: "account_manager", label: roleLabel("account_manager") },
+                    { value: "workspace_manager", label: roleLabel("workspace_manager") },
                     { value: "super_admin", label: roleLabel("super_admin") },
                   ]}
                 />
@@ -2334,7 +2352,7 @@ function UserTable({
                     options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.name || manager.email }))]}
                   />
                 ) : (
-                  <p className="text-sm text-stone-500">Workspace access</p>
+                  <p className="text-sm text-stone-500">{user.role === "super_admin" ? "Platform governance" : "Workspace operations"}</p>
                 )}
                 {user.managerEmail && <p className="mt-1 truncate text-[11px] text-stone-400">{manager?.email || user.managerEmail}</p>}
               </LabeledControl>

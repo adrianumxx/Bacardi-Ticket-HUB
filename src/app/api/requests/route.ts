@@ -1,5 +1,5 @@
 import { badRequest, errorResponse, json } from "@/lib/api";
-import { requireUser } from "@/lib/authz";
+import { canManageWorkspace, requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { Event, Outlet, TicketRequest } from "@/lib/models";
 import { createRequestSchema } from "@/lib/schemas";
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireUser();
     await connectDb();
-    const query: Record<string, unknown> = user.role === "super_admin" ? {} : { requestedBy: user.email };
+    const query: Record<string, unknown> = canManageWorkspace(user.role) ? {} : { requestedBy: user.email };
 
     // Pagination is opt-in via `limit`/`cursor` (an updatedAt ISO timestamp
     // from the last item of the previous page). Without these params the

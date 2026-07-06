@@ -23,7 +23,7 @@ const qaIds: { eventId?: string; outletId?: string; requestId?: string; suffix?:
 
 test.describe.configure({ mode: "serial" });
 
-async function seedTestUser(email: string, role: "super_admin" | "account_manager") {
+async function seedTestUser(email: string, role: "super_admin" | "workspace_manager" | "account_manager") {
   expect(process.env.MONGODB_URI, "MONGODB_URI is required for E2E auth seeding").toBeTruthy();
   await mongoose.connect(process.env.MONGODB_URI!, { dbName: "bacardi-ticket-hub" });
   const normalized = email.trim().toLowerCase();
@@ -34,7 +34,7 @@ async function seedTestUser(email: string, role: "super_admin" | "account_manage
   );
   await mongoose.connection.db.collection("profiles").updateOne(
     { email: normalized },
-    { $set: { email: normalized, role, status: "active", name: role === "super_admin" ? "QA Workspace Manager" : "QA Account Manager", updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { $set: { email: normalized, role, status: "active", name: role === "super_admin" ? "QA Super Admin" : role === "workspace_manager" ? "QA Workspace Manager" : "QA Account Manager", updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
     { upsert: true },
   );
   await mongoose.disconnect();

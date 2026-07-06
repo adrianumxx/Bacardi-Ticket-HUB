@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-const roles = ["super_admin", "account_manager"] as const;
+const roles = ["super_admin", "workspace_manager", "account_manager"] as const;
 const requestStatuses = ["pending", "approved", "partially_approved", "rejected"] as const;
 const accountRequestStatuses = ["pending", "approved", "rejected"] as const;
 const notificationCategories = ["accounts", "requests", "tickets", "users", "outlets", "events", "reports", "system"] as const;

@@ -4,7 +4,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id?: string;
-      role?: "super_admin" | "account_manager";
+      role?: "super_admin" | "workspace_manager" | "account_manager";
       status?: "active" | "blocked";
     } & DefaultSession["user"];
   }

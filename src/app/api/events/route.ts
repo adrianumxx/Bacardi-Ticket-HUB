@@ -1,5 +1,5 @@
 import { badRequest, errorResponse, json } from "@/lib/api";
-import { requireSuperAdmin, requireUser } from "@/lib/authz";
+import { canManageWorkspace, requireUser, requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { Event } from "@/lib/models";
 import { eventSchema } from "@/lib/schemas";
@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const user = await requireUser();
     await connectDb();
-    const query = user.role === "super_admin" ? {} : { status: "published" };
+    const query = canManageWorkspace(user.role) ? {} : { status: "published" };
     const events = await Event.find(query).sort({ startsAt: 1, createdAt: -1 }).lean();
     return json({ events });
   } catch (error) {
@@ -19,7 +19,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireSuperAdmin();
+    const user = await requireWorkspaceManager();
     await connectDb();
     const input = eventSchema.parse(await request.json());
     if (input.status === "published" && input.ticketTypes.filter((type) => type.active).length === 0) {

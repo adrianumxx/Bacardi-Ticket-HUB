@@ -1,5 +1,5 @@
 import { errorResponse, json } from "@/lib/api";
-import { requireSuperAdmin } from "@/lib/authz";
+import { requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { renderRequestStatus } from "@/lib/labels";
@@ -25,7 +25,7 @@ function csvEscape(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const user = await requireSuperAdmin();
+    const user = await requireWorkspaceManager();
     await connectDb();
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "json";

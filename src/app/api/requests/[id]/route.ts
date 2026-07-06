@@ -1,5 +1,5 @@
 import { badRequest, errorResponse, json } from "@/lib/api";
-import { requireSuperAdmin } from "@/lib/authz";
+import { requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { updateRequestSchema } from "@/lib/schemas";
@@ -23,7 +23,7 @@ type RequestItemLine = TicketLineInput & {
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireSuperAdmin();
+    const user = await requireWorkspaceManager();
     await connectDb();
     const { id } = await context.params;
     const input = updateRequestSchema.parse(await request.json());

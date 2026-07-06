@@ -1,5 +1,5 @@
 import { errorResponse, forbidden, json } from "@/lib/api";
-import { requireUser } from "@/lib/authz";
+import { canManageWorkspace, requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
 import { sendTicketSchema } from "@/lib/schemas";
@@ -53,7 +53,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     const ticketRequest = await TicketRequest.findById(id).populate("event").populate("outlet");
     if (!ticketRequest) return json({ error: "Request not found" }, { status: 404 });
-    if (user.role !== "super_admin" && ticketRequest.requestedBy !== user.email) {
+    if (!canManageWorkspace(user.role) && ticketRequest.requestedBy !== user.email) {
       return forbidden("You can only send ticket files for your own requests.");
     }
     if (!["approved", "partially_approved"].includes(ticketRequest.status)) {

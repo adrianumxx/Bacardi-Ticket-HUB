@@ -1,5 +1,5 @@
 import { badRequest, errorResponse, json } from "@/lib/api";
-import { requireSuperAdmin } from "@/lib/authz";
+import { requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { Outlet, TicketRequest } from "@/lib/models";
 import { outletMergeSchema, outletSchema } from "@/lib/schemas";
@@ -7,7 +7,7 @@ import { auditLog } from "@/lib/audit";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireSuperAdmin();
+    const user = await requireWorkspaceManager();
     await connectDb();
     const { id } = await context.params;
     const input = outletSchema.partial().parse(await request.json());
@@ -22,7 +22,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireSuperAdmin();
+    const user = await requireWorkspaceManager();
     await connectDb();
     const { id } = await context.params;
     const { targetOutletId } = outletMergeSchema.parse(await request.json());

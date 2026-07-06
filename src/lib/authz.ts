@@ -36,3 +36,15 @@ export async function requireSuperAdmin() {
   }
   return user;
 }
+
+export async function requireWorkspaceManager() {
+  const user = await requireUser();
+  if (user.role !== "super_admin" && user.role !== "workspace_manager") {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  return user;
+}
+
+export function canManageWorkspace(role?: string) {
+  return role === "super_admin" || role === "workspace_manager";
+}

@@ -79,7 +79,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = String(token.id || "");
-        session.user.role = token.role as "super_admin" | "account_manager";
+        session.user.role = token.role as "super_admin" | "workspace_manager" | "account_manager";
         session.user.status = token.status as "active" | "blocked";
       }
       return session;

@@ -27,7 +27,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     const blocking = input.status === "blocked" && current.role === "super_admin";
     const disablingAccess = accessEnabled === false && current.role === "super_admin";
     if ((demoting || blocking || disablingAccess) && (await isLastSuperAdmin(email))) {
-      return badRequest("You cannot remove, block, or demote the last active manager.", "LAST_MANAGER");
+      return badRequest("You cannot remove, block, or demote the last active super admin.", "LAST_SUPER_ADMIN");
     }
 
     if (input.managerEmail) {
@@ -39,13 +39,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
       if (managerEmail === email) {
         return badRequest("An account manager cannot be their own manager.");
       }
-      const manager = await Profile.findOne({ email: managerEmail, role: "super_admin" });
+      const manager = await Profile.findOne({ email: managerEmail, role: { $in: ["super_admin", "workspace_manager"] } });
       if (!manager) return badRequest("Select an existing manager to assign this team member to.");
     }
 
     if (input.role) current.role = input.role;
     if (input.status) current.status = input.status;
-    if (input.role === "super_admin") current.managerEmail = "";
+    if (input.role === "super_admin" || input.role === "workspace_manager") current.managerEmail = "";
     else if (input.managerEmail !== undefined) current.managerEmail = normalizeEmail(input.managerEmail);
     await current.save();
 
@@ -66,7 +66,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
       entityType: "profile",
       entityId: email,
       title: "Account settings updated",
-      message: `Your Bacardi Ticket Hub account was updated by a manager.`,
+      message: `Your Bacardi Ticket Hub account was updated by a super admin.`,
     });
     await auditLog({ actor: actor.email, action: "user.updated", target: email, payload: input });
 
@@ -93,7 +93,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ emai
 
     const current = await Profile.findOne({ email });
     if (current?.role === "super_admin" && (await isLastSuperAdmin(email))) {
-      return badRequest("You cannot remove the last active manager.", "LAST_MANAGER");
+      return badRequest("You cannot remove the last active super admin.", "LAST_SUPER_ADMIN");
     }
 
     await Promise.all([Profile.deleteOne({ email }), AllowedUser.deleteOne({ email })]);

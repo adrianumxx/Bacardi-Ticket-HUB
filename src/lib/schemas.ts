@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { splitEmails } from "@/lib/utils";
 
-export const roleSchema = z.enum(["super_admin", "account_manager"]);
+export const roleSchema = z.enum(["super_admin", "workspace_manager", "account_manager"]);
 
 export const allowedUserSchema = z.object({
   email: z.email(),

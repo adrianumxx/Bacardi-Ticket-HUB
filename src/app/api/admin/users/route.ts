@@ -46,11 +46,11 @@ export async function POST(request: Request) {
       entityType: "profile",
       entityId: email,
       title: "Access enabled",
-      message: `A manager enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`,
+      message: `A super admin enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`,
       email: {
         subject: "Your Bacardi Ticket Hub access is enabled",
         replyTo: user.email,
-        html: emailHtml("Access enabled", `A manager enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`),
+        html: emailHtml("Access enabled", `A super admin enabled your Bacardi Ticket Hub account. You can now sign in with ${email}.`),
       },
     });
     await auditLog({ actor: user.email, action: "user.access_enabled", target: email, payload: { role: input.role } });
