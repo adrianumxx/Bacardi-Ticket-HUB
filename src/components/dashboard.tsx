@@ -369,7 +369,6 @@ function ActionButton({
 function ManagerTodayPanel({
   requests,
   users,
-  mailStatus,
   onOpenRequests,
   onOpenUsers,
   onOpenReports,
@@ -380,7 +379,6 @@ function ManagerTodayPanel({
     profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   };
-  mailStatus: { mail: MailHealthStatus; lastError?: string; lastErrorAt?: string } | null;
   onOpenRequests: (filter: RequestQuickFilter) => void;
   onOpenUsers: () => void;
   onOpenReports: () => void;
@@ -465,22 +463,10 @@ function ManagerTodayPanel({
 
   return (
     <div className="space-y-5">
-      {mailStatus && mailStatus.mail.status !== "ready" && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold">{mailStatus.mail.label}</p>
-              <p className="mt-1 leading-6">{mailStatus.mail.message}</p>
-            </div>
-            <Badge tone={mailStatus.mail.tone}>{mailStatus.mail.status.replaceAll("_", " ")}</Badge>
-          </div>
-        </div>
-      )}
-
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <TodayActionCard title="Pending" value={today.pending.length} detail="Requests to review" tone="warn" icon={Clock} onClick={() => onOpenRequests("pending")} />
-        <TodayActionCard title="Approved, not sent" value={today.approvedNotSent.length} detail="Need ticket email" tone="neutral" icon={Send} onClick={() => onOpenRequests("approved_not_sent")} />
-        <TodayActionCard title="Email failed" value={today.emailFailed.length} detail="Needs retry" tone="bad" icon={AlertCircle} onClick={() => onOpenRequests("email_failed")} />
+        <TodayActionCard title="Approved, not sent" value={today.approvedNotSent.length} detail="Need draft" tone="neutral" icon={Send} onClick={() => onOpenRequests("approved_not_sent")} />
+        <TodayActionCard title="Failed dispatch" value={today.emailFailed.length} detail="Needs retry" tone="bad" icon={AlertCircle} onClick={() => onOpenRequests("email_failed")} />
         <TodayActionCard title="Unassigned AM" value={today.unassignedManagers.length} detail="No manager owner" tone="neutral" icon={Users} onClick={onOpenUsers} />
         <TodayActionCard title="This week" value={today.createdThisWeek.length} detail={`${today.createdToday.length} today`} tone="good" icon={CalendarDays} onClick={onOpenReports} />
         <TodayActionCard title="Tickets this week" value={today.ticketsThisWeek} detail={`${today.ticketsToday} today`} tone="good" icon={Ticket} onClick={onOpenReports} />
@@ -1279,7 +1265,7 @@ export function Dashboard() {
               <Kpi label="Pending" value={kpis.pending} icon={Clock} tone="warn" />
               <Kpi label="Approved" value={kpis.approved} icon={CheckCircle2} tone="good" />
               <Kpi label="Rejected" value={kpis.rejected} icon={XCircle} tone="bad" />
-              <Kpi label="Ticket Emails Sent" value={kpis.sent} icon={Send} tone="neutral" />
+              <Kpi label="Ticket Dispatches" value={kpis.sent} icon={Send} tone="neutral" />
             </div>
           )}
 
@@ -1287,7 +1273,6 @@ export function Dashboard() {
             <ManagerTodayPanel
               requests={requests}
               users={users}
-              mailStatus={mailStatus}
               onOpenRequests={(filter) => {
                 setRequestQuickFilter(filter);
                 openTab("requests");
@@ -2172,10 +2157,10 @@ function EmailHealthCard({ status }: { status: { mail: MailHealthStatus; lastErr
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Email delivery</p>
-          <h2 className="mt-1 text-lg font-semibold">Resend status</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Optional system email</p>
+          <h2 className="mt-1 text-lg font-semibold">Notification status</h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
-            {mail?.message || "Checking the current mail configuration."}
+            {mail?.message || "Ticket dispatch uses each user's official mailbox. This only affects optional system notification emails."}
           </p>
         </div>
         <Badge tone={tone}>{statusCopy}</Badge>
@@ -3082,7 +3067,7 @@ function SendTicketPanel({
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-md border border-stone-200 bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Send ticket files</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Official mailbox draft</p>
                 <h3 className="mt-1 text-xl font-semibold">{request.event?.name}</h3>
               </div>
               <ActionButton type="button" variant="ghost" className="min-h-9 px-2" onClick={() => setShowSendWindow(false)}>
@@ -3384,7 +3369,7 @@ function DispatchList({
             )}
           </div>
         ))}
-        {dispatches.length === 0 && <p className="text-sm text-stone-500">No ticket emails have been sent.</p>}
+        {dispatches.length === 0 && <p className="text-sm text-stone-500">No ticket dispatches have been recorded.</p>}
       </div>
     </section>
   );
@@ -3675,7 +3660,7 @@ function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
   return (
     <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
       <h3 className="text-sm font-semibold">Dispatch coverage</h3>
-      <p className="mt-0.5 text-xs text-stone-500">How many approved workflows already produced ticket emails.</p>
+      <p className="mt-0.5 text-xs text-stone-500">How many approved workflows already recorded ticket dispatches.</p>
       {totals.requests === 0 ? (
         <div className="mt-4"><EmptyState text="No requests match the current filters." /></div>
       ) : (
@@ -3700,9 +3685,9 @@ function DispatchCoverageChart({ rows }: { rows: ReportRow[] }) {
             </div>
           </div>
           <div className="grid gap-2 text-sm">
-            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Requests with email dispatch</span><strong>{totals.dispatched}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Requests with dispatch</span><strong>{totals.dispatched}</strong></div>
             <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Total request rows</span><strong>{totals.requests}</strong></div>
-            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Ticket emails sent</span><strong>{totals.emails}</strong></div>
+            <div className="flex justify-between gap-4 rounded-md bg-stone-50 px-3 py-2"><span>Dispatch records</span><strong>{totals.emails}</strong></div>
           </div>
         </div>
       )}
@@ -4156,7 +4141,7 @@ function ManagerDrilldownPanel({
                 <InsightMetric label="Requests" value={summary.requests} detail="Created in the current filters." />
                 <InsightMetric label="Tickets requested" value={summary.tickets} detail={`${summary.approvedTickets} approved ticket(s).`} tone="good" />
                 <InsightMetric label="Pending / rejected" value={`${summary.pending} / ${summary.rejected}`} detail="Items needing attention or declined." tone={summary.pending > 0 ? "warn" : "neutral"} />
-                <InsightMetric label="Ticket emails" value={summary.dispatches} detail={`Latest activity ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
+                <InsightMetric label="Dispatches" value={summary.dispatches} detail={`Latest activity ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
               </div>
 
               <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
@@ -4358,7 +4343,7 @@ function AnalyticsSection({
         <InsightMetric label="Approval rate" value={`${approvalRate}%`} detail={`${approved} approved or partially approved of ${totalRequests} request${totalRequests === 1 ? "" : "s"}.`} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
         <InsightMetric label="Average tickets" value={avgTickets} detail="Requested tickets per request in the current filter." />
         <InsightMetric label="Pending queue" value={pending} detail="Requests still waiting for a manager decision." tone={pending > 0 ? "warn" : "good"} />
-        <InsightMetric label="Ticket emails" value={totalDispatches} detail="Dispatch records created after ticket files were sent." />
+        <InsightMetric label="Dispatches" value={totalDispatches} detail="Manual or system dispatch records for approved ticket workflows." />
       </div>
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
         <TicketsOverTimeChart rows={rows} />
@@ -4380,9 +4365,9 @@ function AnalyticsSection({
         />
         <RankedBarChart
           title="Clients invited the most"
-          subtitle="Outlets with the most ticket emails actually sent."
+          subtitle="Outlets with the most recorded ticket dispatches."
           data={rankedTotals(rows, "outlet", "dispatches")}
-          emptyText="No ticket emails have been sent in the current filters."
+          emptyText="No ticket dispatches have been recorded in the current filters."
           onSelect={(label) => onSelectFocus({ kind: "outlet", label })}
         />
       </div>

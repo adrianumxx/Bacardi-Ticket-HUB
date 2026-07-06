@@ -1,13 +1,13 @@
 # Bacardi Ticket Hub
 
-Operational dashboard for Bacardi-sponsored events and festivals. Managers create sponsored activations, control outlet ticket rules, review account-manager requests, and send ticket files by email attachment.
+Operational dashboard for Bacardi-sponsored events and festivals. Managers create sponsored activations, control outlet ticket rules, review account-manager requests, and prepare official mailbox drafts for ticket dispatch.
 
 ## Stack
 
 - Next.js App Router + TypeScript
 - MongoDB Atlas with Mongoose
 - NextAuth credentials provider with manager-approved email access
-- Resend for transactional email and ticket attachments
+- Official mailbox drafts for ticket dispatch
 - Tailwind CSS + lucide-react
 
 ## Features
@@ -20,9 +20,9 @@ Operational dashboard for Bacardi-sponsored events and festivals. Managers creat
 - Approved outlets and account-manager-proposed outlets
 - Ticket requests validated against sponsored event or festival rules
 - Manager review, status updates, recipient edits, notes, and approval
-- Ticket delivery by email attachment only
+- Ticket dispatch through each user's official mailbox
 - Internal notification inbox for access, request, ticket, user, outlet, event, and report activity
-- Optional Resend email delivery after internal notifications are recorded
+- Optional Resend delivery for system notifications only
 - User blocking, role changes, access disabling, outlet editing, and outlet merge workflow
 - Audit log records manager actions and report exports
 - No ticket inventory storage and no persistent ticket file storage
@@ -34,7 +34,7 @@ Operational dashboard for Bacardi-sponsored events and festivals. Managers creat
 1. Copy `.env.example` to `.env.local`.
 2. Create a free MongoDB Atlas cluster and set `MONGODB_URI`.
 3. Set `SUPER_ADMIN_EMAILS` to your admin email address.
-4. Add `RESEND_API_KEY`, `MAIL_FROM`, and `RESEND_WEBHOOK_SECRET` to send and track real emails. Without a key, internal notifications still work and email delivery is simulated.
+4. Optional: add `RESEND_API_KEY`, `MAIL_FROM`, and `RESEND_WEBHOOK_SECRET` only if you want system notification emails. Ticket dispatch works through each user's official mailbox.
 
 ```bash
 npm install
@@ -50,7 +50,7 @@ Open [http://localhost:3000](http://localhost:3000).
 3. Create approved outlets and published sponsored events or festivals.
 4. Account managers submit requests for published Bacardi-sponsored activations.
 5. The manager reviews, edits, approves, partially approves, or rejects ticket requests.
-6. The manager uploads ticket files at send time and enters the recipient emails.
+6. The sender opens an official mailbox draft, attaches ticket files in Outlook/Gmail, sends from their own work email, and the hub records the dispatch.
 
 ## Verification
 
@@ -67,8 +67,8 @@ All commands should complete without errors. `test:e2e` uses `QA`-prefixed tempo
 ## Production Checklist
 
 - Use a long random `NEXTAUTH_SECRET`.
-- Verify `MAIL_FROM` in Resend before setting `RESEND_API_KEY`.
-- Add a Resend webhook pointing to `/api/mail/webhook` and copy its signing secret into `RESEND_WEBHOOK_SECRET`.
+- Optional: verify `MAIL_FROM` in Resend before setting `RESEND_API_KEY` for system notification emails.
+- Optional: add a Resend webhook pointing to `/api/mail/webhook` and copy its signing secret into `RESEND_WEBHOOK_SECRET`.
 - Keep `SUPER_ADMIN_EMAILS` to at least one active manager.
 - Confirm MongoDB Atlas backups are enabled.
 - Run `npm run check` before deployment.
