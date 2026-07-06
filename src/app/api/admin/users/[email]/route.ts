@@ -22,6 +22,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     const current = await Profile.findOne({ email });
     if (!current) return notFound("User profile not found.");
     const accessEnabled = input.accessEnabled ?? input.whitelisted;
+    const previousRole = current.role;
+
+    const selfRoleChange = email === actor.email && input.role && input.role !== current.role;
+    const selfBlocking = email === actor.email && input.status === "blocked";
+    const selfDisabling = email === actor.email && accessEnabled === false;
+    if (selfRoleChange || selfBlocking || selfDisabling) {
+      return badRequest("You cannot change your own role, block yourself, or disable your own access.", "SELF_ADMIN_CHANGE");
+    }
 
     const demoting = input.role && current.role === "super_admin" && input.role !== "super_admin";
     const blocking = input.status === "blocked" && current.role === "super_admin";
@@ -39,8 +47,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
       if (managerEmail === email) {
         return badRequest("An account manager cannot be their own manager.");
       }
-      const manager = await Profile.findOne({ email: managerEmail, role: { $in: ["super_admin", "workspace_manager"] } });
-      if (!manager) return badRequest("Select an existing manager to assign this team member to.");
+      const [manager, managerAccess] = await Promise.all([
+        Profile.findOne({ email: managerEmail, role: { $in: ["super_admin", "workspace_manager"] }, status: "active" }),
+        AllowedUser.findOne({ email: managerEmail }),
+      ]);
+      if (!manager || !managerAccess) return badRequest("Select an active manager with approved access to assign this team member to.");
     }
 
     if (input.role) current.role = input.role;
@@ -48,6 +59,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     if (input.role === "super_admin" || input.role === "workspace_manager") current.managerEmail = "";
     else if (input.managerEmail !== undefined) current.managerEmail = normalizeEmail(input.managerEmail);
     await current.save();
+
+    const noLongerValidTeamOwner =
+      (previousRole === "super_admin" || previousRole === "workspace_manager") &&
+      (current.role === "account_manager" || current.status === "blocked" || accessEnabled === false);
+    let unassignedReports = 0;
+    if (noLongerValidTeamOwner) {
+      const result = await Profile.updateMany({ managerEmail: email }, { $set: { managerEmail: "" } });
+      unassignedReports = result.modifiedCount;
+    }
 
     if (accessEnabled === false) {
       await AllowedUser.deleteOne({ email });
@@ -68,7 +88,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
       title: "Account settings updated",
       message: `Your Bacardi Ticket Hub account was updated by a super admin.`,
     });
-    await auditLog({ actor: actor.email, action: "user.updated", target: email, payload: input });
+    await auditLog({ actor: actor.email, action: "user.updated", target: email, payload: { ...input, unassignedReports } });
 
     const [profile, allowed] = await Promise.all([
       Profile.findOne({ email }).lean(),

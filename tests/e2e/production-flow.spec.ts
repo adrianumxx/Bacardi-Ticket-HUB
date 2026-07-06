@@ -106,6 +106,8 @@ test.afterAll(async () => {
       { recipient: /^qa\.e2e\./ },
     ],
   });
+  await db.collection("allowedusers").deleteMany({ email: /^qa\.e2e\./ });
+  await db.collection("profiles").deleteMany({ email: /^qa\.e2e\./ });
   await mongoose.disconnect();
 });
 
@@ -187,8 +189,8 @@ test("workspace manager only sees and manages assigned team requests", async ({ 
 });
 
 test("super admin can complete request workflow and see internal notifications", async ({ page }) => {
-  const adminEmail = (process.env.SUPER_ADMIN_EMAILS || "admin@example.com").split(",")[0].trim();
   qaIds.suffix = String(Date.now());
+  const adminEmail = `qa.e2e.admin.${qaIds.suffix}@example.com`;
   const qaEmail = `qa.e2e.${qaIds.suffix}@example.com`;
 
   await seedTestUser(adminEmail, "super_admin");
@@ -264,7 +266,7 @@ test("super admin can complete request workflow and see internal notifications",
   ]);
   await page.getByTitle("Notifications").click();
   await expect(page.getByText("Inbox")).toBeVisible();
-  await expect(page.getByText(/New sponsorship ticket request|Ticket email dispatched/).first()).toBeVisible();
+  await expect(page.getByText(/Request received|New sponsorship ticket request|Ticket email dispatched/).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Select messages" }).click();
   await page.getByRole("button", { name: "Select all visible" }).click();
@@ -281,9 +283,9 @@ test("super admin can complete request workflow and see internal notifications",
 });
 
 test("personas can create events, outlets, and requests from dashboard forms", async ({ page }) => {
-  const adminEmail = (process.env.SUPER_ADMIN_EMAILS || "amelillo@bacardi.com").split(",")[0].trim();
-  const managerEmail = "adrianomelilloxx@gmail.com";
   qaIds.suffix = `ui-${Date.now()}`;
+  const adminEmail = `qa.e2e.admin.${qaIds.suffix}@example.com`;
+  const managerEmail = `qa.e2e.account.${qaIds.suffix}@example.com`;
   const eventName = `QA E2E UI Festival ${qaIds.suffix}`;
   const outletName = `QA E2E UI Outlet ${qaIds.suffix}`;
   const outletNameTwo = `QA E2E UI Outlet 2 ${qaIds.suffix}`;

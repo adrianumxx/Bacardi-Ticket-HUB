@@ -59,6 +59,13 @@ function roleLabel(role?: Role) {
   return "Unknown role";
 }
 
+function roleShortLabel(role?: Role) {
+  if (role === "super_admin") return "Super admin";
+  if (role === "workspace_manager") return "Workspace mgr";
+  if (role === "account_manager") return "Account mgr";
+  return "Unknown";
+}
+
 function roleDescription(role?: Role) {
   if (role === "super_admin") return "Can control users, audit, platform governance, and all operational workflows.";
   if (role === "workspace_manager") return "Can manage daily operations: requests, events, outlets, reports, approvals, and ticket dispatch.";
@@ -1825,6 +1832,8 @@ function UsersPanel({
   onDone: () => Promise<void>;
   notify: (message: string, tone?: Tone) => void;
 }) {
+  const { data: session } = useSession();
+  const currentUserEmail = session?.user?.email?.toLowerCase() || "";
   const [submitting, setSubmitting] = useState(false);
   const [busyEmail, setBusyEmail] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -1834,12 +1843,15 @@ function UsersPanel({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const role = String(form.get("role") || "account_manager") as Role;
+    const email = String(form.get("email") || "");
+    if (role === "super_admin" && !window.confirm(`Create Super admin access for ${email}? This grants full platform governance access.`)) return;
     setSubmitting(true);
     setFormError("");
     try {
       const response = await api<{ delivery?: { status: string } }>("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ email: form.get("email"), role: form.get("role") }),
+        body: JSON.stringify({ email, role }),
       });
       formElement.reset();
       notify(`User access updated. Notification ${response.delivery?.status || "skipped"}.`);
@@ -1949,6 +1961,7 @@ function UsersPanel({
           title="Users and access"
           rows={visibleRows}
           managers={combinedRows.filter((row) => isWorkspaceManager(row.role))}
+          currentUserEmail={currentUserEmail}
           busyEmail={busyEmail}
           searchActive={Boolean(userSearch)}
           onUpdate={updateUser}
@@ -2270,6 +2283,7 @@ function UserTable({
   onUpdate,
   onDelete,
   managers = [],
+  currentUserEmail,
 }: {
   title: string;
   rows: AdminUserRow[];
@@ -2278,6 +2292,7 @@ function UserTable({
   onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) => Promise<void>;
   onDelete: (email: string) => Promise<void>;
   managers?: AdminUserRow[];
+  currentUserEmail: string;
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
@@ -2288,7 +2303,7 @@ function UserTable({
         </div>
         <CountPill label={searchActive ? "Matches" : "Users"} value={rows.length} />
       </div>
-      <div className="hidden grid-cols-[minmax(230px,1.2fr)_150px_180px_150px_210px] gap-4 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">
+      <div className="hidden grid-cols-[minmax(250px,1.15fr)_190px_220px_170px_220px] gap-4 border-b border-stone-200 bg-stone-50/70 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400 xl:grid">
         <span>User</span>
         <span>Role</span>
         <span>Team</span>
@@ -2298,12 +2313,13 @@ function UserTable({
       <div className="divide-y divide-stone-100">
         {rows.map((user) => {
           const isBusy = busyEmail === user.email;
+          const isSelf = user.email.toLowerCase() === currentUserEmail;
           const initials = (user.name || user.email).slice(0, 2);
           const manager = managers.find((item) => item.email === user.managerEmail);
           return (
             <div
               key={`${title}-${user.email}`}
-              className={`grid gap-3 px-4 py-4 transition-colors hover:bg-stone-50/60 xl:grid-cols-[minmax(230px,1.2fr)_150px_180px_150px_210px] xl:items-center xl:gap-4 ${isBusy ? "opacity-70" : ""}`}
+              className={`grid gap-3 px-4 py-4 transition-colors hover:bg-stone-50/60 xl:grid-cols-[minmax(250px,1.15fr)_190px_220px_170px_220px] xl:items-center xl:gap-4 ${isBusy ? "opacity-70" : ""}`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold uppercase text-stone-500">
@@ -2321,14 +2337,21 @@ function UserTable({
               <LabeledControl label="Role">
                 <MiniSelect
                   value={user.role}
-                  disabled={isBusy}
-                  onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
+                  disabled={isBusy || isSelf}
+                  onChange={(value) => {
+                    const nextRole = value as Role;
+                    if (nextRole === user.role) return;
+                    if (nextRole === "super_admin" && !window.confirm(`Promote ${user.email} to Super admin? This grants full platform governance access.`)) return;
+                    if (user.role === "super_admin" && !window.confirm(`Change ${user.email} from Super admin to ${roleLabel(nextRole)}?`)) return;
+                    void onUpdate(user.email, { role: nextRole, accessEnabled: true });
+                  }}
                   options={[
-                    { value: "account_manager", label: roleLabel("account_manager") },
-                    { value: "workspace_manager", label: roleLabel("workspace_manager") },
-                    { value: "super_admin", label: roleLabel("super_admin") },
+                    { value: "account_manager", label: roleShortLabel("account_manager") },
+                    { value: "workspace_manager", label: roleShortLabel("workspace_manager") },
+                    { value: "super_admin", label: roleShortLabel("super_admin") },
                   ]}
                 />
+                {isSelf && <p className="mt-1 text-[11px] text-stone-400">Current session</p>}
               </LabeledControl>
               <LabeledControl label="Team">
                 {user.role === "account_manager" ? (
@@ -2350,7 +2373,7 @@ function UserTable({
                   <Badge tone={user.accessEnabled ? "good" : "warn"}>{user.accessEnabled ? "Approved access" : "Access missing"}</Badge>
                 </div>
               </div>
-              <UserActions user={user} isBusy={isBusy} onUpdate={onUpdate} onDelete={onDelete} />
+              <UserActions user={user} isBusy={isBusy} isSelf={isSelf} onUpdate={onUpdate} onDelete={onDelete} />
             </div>
           );
         })}
@@ -2372,11 +2395,13 @@ function LabeledControl({ label, children }: { label: string; children: React.Re
 function UserActions({
   user,
   isBusy,
+  isSelf,
   onUpdate,
   onDelete,
 }: {
   user: AdminUserRow;
   isBusy: boolean;
+  isSelf: boolean;
   onUpdate: (email: string, payload: { role?: Role; status?: "active" | "blocked"; accessEnabled?: boolean; managerEmail?: string }) => Promise<void>;
   onDelete: (email: string) => Promise<void>;
 }) {
@@ -2385,7 +2410,7 @@ function UserActions({
     <div className="flex flex-wrap items-center justify-start gap-1.5 xl:justify-end">
       <ActionButton
         variant="secondary"
-        disabled={isBusy}
+        disabled={isBusy || isSelf}
         className="min-h-8 px-3 text-[11px]"
         onClick={() => {
           if (!blocking || window.confirm(`Block ${user.email}? They will be signed out and unable to sign in until unblocked.`)) {
@@ -2398,7 +2423,7 @@ function UserActions({
       {user.accessEnabled ? (
         <ActionButton
           variant="ghost"
-          disabled={isBusy}
+          disabled={isBusy || isSelf}
           className="min-h-8 px-3 text-[11px]"
           onClick={() => {
             if (window.confirm(`Disable access for ${user.email}? They will no longer be able to sign in.`)) {
@@ -2415,7 +2440,7 @@ function UserActions({
       )}
       <ActionButton
         variant="ghost"
-        disabled={isBusy}
+        disabled={isBusy || isSelf}
         className="min-h-8 px-3 text-[11px] text-red-600"
         onClick={() => void onDelete(user.email)}
       >
