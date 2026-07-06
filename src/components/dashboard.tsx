@@ -952,7 +952,7 @@ function NotificationCounter({ label, value, tone = "neutral" }: { label: string
 function notificationContextLabel(category: AppNotification["category"]) {
   if (category === "accounts" || category === "users") return "Open users";
   if (category === "tickets" || category === "requests") return "Open requests";
-  if (category === "events" || category === "outlets") return "Open setup";
+  if (category === "events" || category === "outlets") return "Open events";
   if (category === "reports") return "Open reports";
   return "Open workspace";
 }
@@ -2284,7 +2284,7 @@ function SendTicketPanel({ request, onDone, notify }: { request: TicketRequest; 
   const [sending, setSending] = useState(false);
   const [pendingSend, setPendingSend] = useState<{ formData: FormData; form: HTMLFormElement; recipients: string[]; fileCount: number } | null>(null);
   const canSendTickets = request.status === "approved" || request.status === "partially_approved";
-  const defaultMessage = `Attached are the approved ticket files for ${request.event?.name}, part of the Bacardi sponsorship ticket program.`;
+  const defaultMessage = `Attached are the approved ticket files for ${request.event?.name}.`;
   const approvedTotal = request.items.reduce((sum, item) => sum + (item.approvedQuantity || 0), 0);
 
   async function sendTicket(event: FormEvent<HTMLFormElement>) {
@@ -3702,7 +3702,26 @@ function ReportsPanel() {
 
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Request report</h2>
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 grid gap-3 lg:hidden">
+          {filteredRows.map((row) => (
+            <article key={String(row.id)} className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-stone-950">{row.event}</p>
+                  <p className="mt-0.5 text-xs text-stone-500">{row.eventKind} · {row.market || "No market"}</p>
+                </div>
+                <Badge tone={String(row.status) === "Rejected" ? "bad" : String(row.status) === "Pending" ? "warn" : "good"}>{String(row.status)}</Badge>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-stone-600">
+                <p><strong>Outlet:</strong> {row.outlet || "-"}</p>
+                <p><strong>Account manager:</strong> {row.accountManager}</p>
+                {row.accountManagerEmail && row.accountManagerEmail !== row.accountManager && <p><strong>Email:</strong> {row.accountManagerEmail}</p>}
+                <p><strong>Tickets:</strong> {row.quantity} · <strong>Dispatches:</strong> {row.dispatches}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="mt-4 hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b text-stone-600">
               <tr><th className="py-2">Event/Festival</th><th>Type</th><th>Market</th><th>Outlet</th><th>Account Manager</th><th>Status</th><th>Tickets</th><th>Dispatches</th></tr>
