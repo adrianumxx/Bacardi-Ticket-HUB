@@ -3989,7 +3989,53 @@ function summarizeReportRows(rows: ReportRow[]) {
   );
 }
 
-function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; rows: ReportRow[]; onClose: () => void }) {
+function reportSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 56) || "report";
+}
+
+function reportDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function reportFilename(scope: string, extension: "csv" | "pdf") {
+  return `bacardi-ticket-${reportSlug(scope)}-${reportDateStamp()}.${extension}`;
+}
+
+function reportCsv(rows: ReportRow[]) {
+  const header = ["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Email", "Status", "Tickets", "Approved", "Dispatches", "Created"];
+  const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const body = rows.map((row) =>
+    [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.accountManagerEmail, row.status, row.quantity, row.approved, row.dispatches, row.createdAt].map(escape).join(","),
+  );
+  return [header.map(escape).join(","), ...body].join("\n");
+}
+
+function downloadTextFile(contents: string, filename: string, type: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ManagerDrilldownPanel({
+  manager,
+  rows,
+  onClose,
+  onExportCsv,
+  onExportPdf,
+}: {
+  manager: string;
+  rows: ReportRow[];
+  onClose: () => void;
+  onExportCsv: (rows: ReportRow[], scope: string) => void;
+  onExportPdf: (rows: ReportRow[], scope: string) => void;
+}) {
   const managerRows = useMemo(() => rows.filter((row) => String(row.accountManagerEmail || row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
   const summary = useMemo(() => buildManagerSummaries(managerRows)[0], [managerRows]);
   const festivals = useMemo(() => {
@@ -4050,9 +4096,17 @@ function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; ro
             {summary?.email && summary.email !== summary.manager && <p className="mt-0.5 truncate text-xs text-stone-500">{summary.email}</p>}
             <p className="mt-1 text-sm text-stone-600">Filtered report by festival/event, outlet, status, and dispatch activity.</p>
           </div>
-          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
-            <X size={18} />
-          </ActionButton>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <ActionButton type="button" variant="secondary" onClick={() => onExportCsv(managerRows, `manager-${summary?.manager || manager}`)}>
+              <Download size={14} /> CSV
+            </ActionButton>
+            <ActionButton type="button" variant="secondary" onClick={() => onExportPdf(managerRows, `manager-${summary?.manager || manager}`)}>
+              <Download size={14} /> PDF
+            </ActionButton>
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+              <X size={18} />
+            </ActionButton>
+          </div>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {summary ? (
@@ -4123,7 +4177,19 @@ function ManagerDrilldownPanel({ manager, rows, onClose }: { manager: string; ro
   );
 }
 
-function ReportFocusPanel({ focus, rows, onClose }: { focus: ReportFocus; rows: ReportRow[]; onClose: () => void }) {
+function ReportFocusPanel({
+  focus,
+  rows,
+  onClose,
+  onExportCsv,
+  onExportPdf,
+}: {
+  focus: ReportFocus;
+  rows: ReportRow[];
+  onClose: () => void;
+  onExportCsv: (rows: ReportRow[], scope: string) => void;
+  onExportPdf: (rows: ReportRow[], scope: string) => void;
+}) {
   const focusRows = useMemo(
     () => rows.filter((row) => String(row[focus.kind] || "").trim() === focus.label),
     [focus, rows],
@@ -4151,9 +4217,17 @@ function ReportFocusPanel({ focus, rows, onClose }: { focus: ReportFocus; rows: 
             <h2 className="mt-1 truncate text-xl font-semibold">{focus.label}</h2>
             <p className="mt-1 text-sm text-stone-600">Detail from the current report filters.</p>
           </div>
-          <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
-            <X size={18} />
-          </ActionButton>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <ActionButton type="button" variant="secondary" onClick={() => onExportCsv(focusRows, `${focus.kind}-${focus.label}`)}>
+              <Download size={14} /> CSV
+            </ActionButton>
+            <ActionButton type="button" variant="secondary" onClick={() => onExportPdf(focusRows, `${focus.kind}-${focus.label}`)}>
+              <Download size={14} /> PDF
+            </ActionButton>
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+              <X size={18} />
+            </ActionButton>
+          </div>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -4318,6 +4392,63 @@ function ReportsPanel() {
     return params;
   }, [dateFrom, dateTo, reportSearch, statusFilter]);
 
+  async function exportPdfRows(exportRows: ReportRow[], scope: string) {
+    setExportNotice(null);
+    setExporting("pdf");
+    try {
+      const [{ default: jsPDF }, autoTable] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+      const doc = new jsPDF({ unit: "pt" });
+      const summary = summarizeReportRows(exportRows);
+      const filename = reportFilename(scope, "pdf");
+      const title = scope === "workspace-report" ? "Bacardi Ticket Hub Report" : `Bacardi Ticket Hub · ${scope.replace(/-/g, " ")}`;
+
+      doc.setFillColor(58, 42, 24);
+      doc.rect(0, 0, 595, 88, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text(title, 40, 38);
+      doc.setFontSize(9);
+      doc.text(`Generated ${formatDate(new Date().toISOString())}`, 40, 58);
+      doc.setTextColor(236, 223, 200);
+      doc.text(`Rows ${exportRows.length} · Status ${statusFilter === "all" ? "All" : renderRequestStatus(statusFilter)} · Search ${reportSearch || "None"}`, 40, 74);
+
+      doc.setTextColor(58, 42, 24);
+      doc.setFontSize(11);
+      const metrics = [
+        `Requests: ${summary.requests}`,
+        `Tickets: ${summary.tickets}`,
+        `Approved tickets: ${summary.approvedTickets}`,
+        `Dispatches: ${summary.dispatches}`,
+      ];
+      metrics.forEach((metric, index) => {
+        doc.setFillColor(255, 252, 246);
+        doc.roundedRect(40 + index * 128, 112, 116, 42, 6, 6, "F");
+        doc.text(metric, 52 + index * 128, 137);
+      });
+
+      autoTable.default(doc, {
+        head: [["Event/Festival", "Type", "Outlet", "Account Manager", "Status", "Tickets", "Approved", "Dispatches"]],
+        body: exportRows.map((row) => [row.event, row.eventKind, row.outlet, row.accountManager, row.status, row.quantity, row.approved, row.dispatches]),
+        startY: 178,
+        styles: { fontSize: 8, cellPadding: 5 },
+        headStyles: { fillColor: [58, 42, 24], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [255, 252, 246] },
+      });
+      doc.save(filename);
+      setExportNotice({ message: `PDF exported: ${filename}`, tone: "good" });
+    } catch (error) {
+      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
+    } finally {
+      setExporting("");
+    }
+  }
+
+  function exportCsvRows(exportRows: ReportRow[], scope: string) {
+    const filename = reportFilename(scope, "csv");
+    downloadTextFile(reportCsv(exportRows), filename, "text/csv;charset=utf-8");
+    setExportNotice({ message: `CSV exported: ${filename}`, tone: "good" });
+  }
+
   const load = useCallback(async () => {
     const params = reportParams();
     setLoadingReport(true);
@@ -4332,24 +4463,11 @@ function ReportsPanel() {
   }, [reportParams]);
 
   async function exportPdf() {
-    setExportNotice(null);
-    setExporting("pdf");
     try {
       await api(`/api/reports?${reportParams({ export: "pdf" }).toString()}`);
-      const [{ default: jsPDF }, autoTable] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
-      const doc = new jsPDF();
-      doc.text("Bacardi Ticket Hub Report", 14, 14);
-      autoTable.default(doc, {
-        head: [["Event/Festival", "Type", "Market", "Outlet", "Account Manager", "Email", "Status", "Tickets", "Dispatches"]],
-        body: filteredRows.map((row) => [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.accountManagerEmail, row.status, row.quantity, row.dispatches]),
-        startY: 22,
-      });
-      doc.save("bacardi-ticket-report.pdf");
-      setExportNotice({ message: "PDF exported.", tone: "good" });
+      await exportPdfRows(filteredRows, "workspace-report");
     } catch (error) {
       setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
-    } finally {
-      setExporting("");
     }
   }
 
@@ -4366,10 +4484,10 @@ function ReportsPanel() {
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = "bacardi-ticket-report.csv";
+      link.download = reportFilename("workspace-report", "csv");
       link.click();
       URL.revokeObjectURL(url);
-      setExportNotice({ message: "CSV exported.", tone: "good" });
+      setExportNotice({ message: `CSV exported: ${link.download}`, tone: "good" });
     } catch (error) {
       setExportNotice({ message: error instanceof Error ? error.message : "Unable to export CSV.", tone: "bad" });
     } finally {
@@ -4426,8 +4544,24 @@ function ReportsPanel() {
       </div>
 
       <AnalyticsSection rows={filteredRows} selectedManager={selectedManager} onSelectManager={setSelectedManager} onSelectFocus={setSelectedFocus} />
-      {selectedManager && <ManagerDrilldownPanel manager={selectedManager} rows={filteredRows} onClose={() => setSelectedManager(null)} />}
-      {selectedFocus && <ReportFocusPanel focus={selectedFocus} rows={filteredRows} onClose={() => setSelectedFocus(null)} />}
+      {selectedManager && (
+        <ManagerDrilldownPanel
+          manager={selectedManager}
+          rows={filteredRows}
+          onClose={() => setSelectedManager(null)}
+          onExportCsv={exportCsvRows}
+          onExportPdf={(exportRows, scope) => void exportPdfRows(exportRows, scope)}
+        />
+      )}
+      {selectedFocus && (
+        <ReportFocusPanel
+          focus={selectedFocus}
+          rows={filteredRows}
+          onClose={() => setSelectedFocus(null)}
+          onExportCsv={exportCsvRows}
+          onExportPdf={(exportRows, scope) => void exportPdfRows(exportRows, scope)}
+        />
+      )}
 
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Request report</h2>
