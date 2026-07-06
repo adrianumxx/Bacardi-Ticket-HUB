@@ -2,6 +2,7 @@
 
 import { Search, X } from "@/components/ui/solar-icons";
 import type { GlobalSearchResult } from "./types";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
 
 export function GlobalSearch({
   query,
@@ -20,6 +21,7 @@ export function GlobalSearch({
   onClose: () => void;
   onSelect: (result: GlobalSearchResult) => void;
 }) {
+  const { t } = useTranslation();
   const grouped = results.reduce((groups, result) => {
     const group = groups.get(result.group) ?? [];
     group.push(result);
@@ -39,10 +41,10 @@ export function GlobalSearch({
             if (event.key === "Escape") onClose();
           }}
           className="h-10 w-full rounded-full border border-stone-200 bg-white/80 pl-10 pr-10 text-sm text-stone-950 shadow-sm outline-none transition focus:border-[#EB6A1C]"
-          placeholder="Search requests, events, outlets, users..."
+          placeholder={t("search.placeholder")}
         />
         {query && (
-          <button type="button" onClick={() => onQueryChange("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700" aria-label="Clear search">
+          <button type="button" onClick={() => onQueryChange("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700" aria-label={t("search.clear")}>
             <X size={16} />
           </button>
         )}
@@ -71,7 +73,7 @@ export function GlobalSearch({
                 </section>
               ))
             ) : (
-              <div className="px-3 py-6 text-center text-sm text-stone-500">No results found.</div>
+              <div className="px-3 py-6 text-center text-sm text-stone-500">{t("search.noResults")}</div>
             )}
           </div>
         </div>

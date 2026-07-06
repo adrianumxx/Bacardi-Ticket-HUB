@@ -6,6 +6,8 @@ import { formatShortDate } from "@/lib/utils";
 import type { AccountRequest, Role, RequestQuickFilter, TicketRequest, Tone } from "./types";
 import { isToday, isWithinLastDays, requestApprovedWithoutDispatch, requestHasFailedDispatch, requestTicketTotal } from "./helpers";
 import { ActionButton, Badge, EmptyState } from "./ui-primitives";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { localeMap } from "@/lib/i18n/translations";
 
 export function ManagerTodayPanel({
   requests,
@@ -24,6 +26,7 @@ export function ManagerTodayPanel({
   onOpenUsers: () => void;
   onOpenReports: () => void;
 }) {
+  const { t, language } = useTranslation();
   const today = useMemo(() => {
     const pending = requests.filter((request) => request.status === "pending");
     const approvedNotSent = requests.filter(requestApprovedWithoutDispatch);
@@ -38,13 +41,13 @@ export function ManagerTodayPanel({
     const managerPulse = new Map<string, { name: string; email: string; tickets: number; pending: number; requests: number }>();
 
     for (const request of requests) {
-      const eventName = request.event?.name || "Untitled event";
+      const eventName = request.event?.name || t("today.untitledEvent");
       const eventRow = eventPressure.get(eventName) ?? { name: eventName, tickets: 0, requests: 0 };
       eventRow.tickets += requestTicketTotal(request);
       eventRow.requests += 1;
       eventPressure.set(eventName, eventRow);
 
-      const email = request.requestedBy || "Unknown";
+      const email = request.requestedBy || t("today.unknown");
       const managerRow = managerPulse.get(email) ?? { name: request.accountManagerName || email, email, tickets: 0, pending: 0, requests: 0 };
       managerRow.tickets += requestTicketTotal(request);
       managerRow.requests += 1;
@@ -65,39 +68,39 @@ export function ManagerTodayPanel({
       eventPressure: [...eventPressure.values()].sort((a, b) => b.tickets - a.tickets).slice(0, 4),
       managerPulse: [...managerPulse.values()].sort((a, b) => b.tickets - a.tickets || b.requests - a.requests).slice(0, 4),
     };
-  }, [requests, users.accountRequests, users.profiles]);
+  }, [requests, users.accountRequests, users.profiles, t]);
 
   const attentionItems = [
     ...today.emailFailed.slice(0, 3).map((request) => ({
       key: `failed-${request._id}`,
       tone: "bad" as Tone,
-      label: "Email failed",
-      title: request.event?.name || "Ticket dispatch failed",
-      detail: `${request.outlet?.name || "Outlet"} · ${request.accountManagerName || request.requestedBy}`,
+      label: t("today.emailFailed"),
+      title: request.event?.name || t("today.dispatchFailed"),
+      detail: `${request.outlet?.name || t("today.outlet")} · ${request.accountManagerName || request.requestedBy}`,
       action: () => onOpenRequests("email_failed"),
     })),
     ...today.approvedNotSent.slice(0, 3).map((request) => ({
       key: `unsent-${request._id}`,
       tone: "warn" as Tone,
-      label: "Send tickets",
-      title: request.event?.name || "Approved request",
-      detail: `${requestTicketTotal(request)} ticket(s) approved · ${request.outlet?.name || "Outlet"}`,
+      label: t("today.sendTickets"),
+      title: request.event?.name || t("today.approvedRequest"),
+      detail: `${t("today.ticketsApproved", { count: requestTicketTotal(request) })} · ${request.outlet?.name || t("today.outlet")}`,
       action: () => onOpenRequests("approved_not_sent"),
     })),
     ...today.pending.slice(0, 4).map((request) => ({
       key: `pending-${request._id}`,
       tone: "neutral" as Tone,
-      label: "Review",
-      title: request.event?.name || "Pending request",
-      detail: `${request.outlet?.name || "Outlet"} · ${formatShortDate(request.createdAt)}`,
+      label: t("today.review"),
+      title: request.event?.name || t("today.pendingRequest"),
+      detail: `${request.outlet?.name || t("today.outlet")} · ${formatShortDate(request.createdAt, localeMap[language])}`,
       action: () => onOpenRequests("pending"),
     })),
     ...today.pendingAccess.slice(0, 3).map((request) => ({
       key: `access-${request._id}`,
       tone: "warn" as Tone,
-      label: "Access",
+      label: t("today.access"),
       title: request.name || request.email,
-      detail: `${request.email} requested access`,
+      detail: t("today.requestedAccess", { email: request.email }),
       action: onOpenUsers,
     })),
   ].slice(0, 8);
@@ -105,22 +108,22 @@ export function ManagerTodayPanel({
   return (
     <div className="space-y-5">
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <TodayActionCard title="Pending" value={today.pending.length} detail="Requests to review" tone="warn" icon={Clock} onClick={() => onOpenRequests("pending")} />
-        <TodayActionCard title="Approved, not sent" value={today.approvedNotSent.length} detail="Need draft" tone="neutral" icon={Send} onClick={() => onOpenRequests("approved_not_sent")} />
-        <TodayActionCard title="Failed dispatch" value={today.emailFailed.length} detail="Needs retry" tone="bad" icon={AlertCircle} onClick={() => onOpenRequests("email_failed")} />
-        <TodayActionCard title="Unassigned AM" value={today.unassignedManagers.length} detail="No manager owner" tone="neutral" icon={Users} onClick={onOpenUsers} />
-        <TodayActionCard title="This week" value={today.createdThisWeek.length} detail={`${today.createdToday.length} today`} tone="good" icon={CalendarDays} onClick={onOpenReports} />
-        <TodayActionCard title="Tickets this week" value={today.ticketsThisWeek} detail={`${today.ticketsToday} today`} tone="good" icon={Ticket} onClick={onOpenReports} />
+        <TodayActionCard title={t("today.pending")} value={today.pending.length} detail={t("today.reviewRequests")} tone="warn" icon={Clock} onClick={() => onOpenRequests("pending")} />
+        <TodayActionCard title={t("today.approvedNotSent")} value={today.approvedNotSent.length} detail={t("today.needDraft")} tone="neutral" icon={Send} onClick={() => onOpenRequests("approved_not_sent")} />
+        <TodayActionCard title={t("today.failedDispatch")} value={today.emailFailed.length} detail={t("today.needsRetry")} tone="bad" icon={AlertCircle} onClick={() => onOpenRequests("email_failed")} />
+        <TodayActionCard title={t("today.unassignedAm")} value={today.unassignedManagers.length} detail={t("today.noManagerOwner")} tone="neutral" icon={Users} onClick={onOpenUsers} />
+        <TodayActionCard title={t("today.thisWeek")} value={today.createdThisWeek.length} detail={t("today.todayCount", { count: today.createdToday.length })} tone="good" icon={CalendarDays} onClick={onOpenReports} />
+        <TodayActionCard title={t("today.ticketsThisWeek")} value={today.ticketsThisWeek} detail={t("today.todayCount", { count: today.ticketsToday })} tone="good" icon={Ticket} onClick={onOpenReports} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Needs attention</p>
-              <h3 className="mt-1 text-lg font-semibold">Handle these first</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("today.needsAttention")}</p>
+              <h3 className="mt-1 text-lg font-semibold">{t("today.handleFirst")}</h3>
             </div>
-            <ActionButton type="button" variant="secondary" onClick={() => onOpenRequests("all")}>Open requests</ActionButton>
+            <ActionButton type="button" variant="secondary" onClick={() => onOpenRequests("all")}>{t("today.openRequests")}</ActionButton>
           </div>
           <div className="mt-4 divide-y divide-stone-100">
             {attentionItems.map((item) => (
@@ -130,30 +133,30 @@ export function ManagerTodayPanel({
                   <span className="block truncate text-sm font-semibold text-stone-950">{item.title}</span>
                   <span className="block truncate text-xs text-stone-500">{item.detail}</span>
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#EB6A1C]">Open</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-[#EB6A1C]">{t("today.open")}</span>
               </button>
             ))}
-            {attentionItems.length === 0 && <EmptyState text="Nothing urgent right now." />}
+            {attentionItems.length === 0 && <EmptyState text={t("today.nothingUrgent")} />}
           </div>
         </div>
 
         <div className="rounded-md border border-[#3A2A18] bg-[#3A2A18] p-4 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ECDFC8]">Team pulse</p>
-          <h3 className="mt-1 text-lg font-semibold">Who is driving ticket demand</h3>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ECDFC8]">{t("today.teamPulse")}</p>
+          <h3 className="mt-1 text-lg font-semibold">{t("today.whoIsDriving")}</h3>
           <div className="mt-4 space-y-3">
             {today.managerPulse.map((manager) => (
               <button key={manager.email} type="button" onClick={onOpenReports} className="w-full text-left">
                 <div className="mb-1 flex items-center justify-between gap-3 text-sm">
                   <span className="truncate font-medium">{manager.name}</span>
-                  <span className="shrink-0 text-[#ECDFC8]">{manager.tickets} tickets</span>
+                  <span className="shrink-0 text-[#ECDFC8]">{t("today.tickets", { count: manager.tickets })}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-white/15">
                   <div className="h-full rounded-full bg-[#ECDFC8]" style={{ width: `${Math.max(8, Math.min(100, manager.tickets * 8))}%` }} />
                 </div>
-                <p className="mt-1 text-xs text-white/60">{manager.requests} requests · {manager.pending} pending</p>
+                <p className="mt-1 text-xs text-white/60">{t("today.requestsPending", { requests: manager.requests, pending: manager.pending })}</p>
               </button>
             ))}
-            {today.managerPulse.length === 0 && <p className="text-sm text-white/70">No account manager activity yet.</p>}
+            {today.managerPulse.length === 0 && <p className="text-sm text-white/70">{t("today.noManagerActivity")}</p>}
           </div>
         </div>
       </section>
@@ -161,20 +164,20 @@ export function ManagerTodayPanel({
       <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Festival pressure</p>
-            <h3 className="mt-1 text-lg font-semibold">Events with the most ticket demand</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("today.festivalPressure")}</p>
+            <h3 className="mt-1 text-lg font-semibold">{t("today.eventsWithDemand")}</h3>
           </div>
-          <ActionButton type="button" variant="secondary" onClick={onOpenReports}>Open reports</ActionButton>
+          <ActionButton type="button" variant="secondary" onClick={onOpenReports}>{t("today.openReports")}</ActionButton>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {today.eventPressure.map((event) => (
             <button key={event.name} type="button" onClick={onOpenReports} className="rounded-md border border-stone-200 bg-stone-50 p-3 text-left transition hover:border-[#EB6A1C] hover:bg-white">
               <p className="truncate text-sm font-semibold">{event.name}</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">{event.tickets}</p>
-              <p className="text-xs text-stone-500">{event.requests} request(s)</p>
+              <p className="text-xs text-stone-500">{t("today.requestsCount", { count: event.requests })}</p>
             </button>
           ))}
-          {today.eventPressure.length === 0 && <EmptyState text="No event activity yet." />}
+          {today.eventPressure.length === 0 && <EmptyState text={t("today.noEventActivity")} />}
         </div>
       </section>
     </div>
@@ -216,5 +219,3 @@ export function TodayActionCard({
     </button>
   );
 }
-
-
