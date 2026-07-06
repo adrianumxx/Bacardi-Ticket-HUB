@@ -44,3 +44,24 @@ export async function DELETE(request: Request) {
     return errorResponse(error);
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requireUser();
+    await connectDb();
+    const input = (await request.json()) as { ids?: string[]; read?: boolean };
+    const ids = [...new Set((input.ids || []).map((id) => String(id).trim()).filter(Boolean))];
+    if (ids.length === 0) return json({ updated: 0 });
+
+    const result = await AppNotification.updateMany(
+      {
+        _id: { $in: ids },
+        recipient: normalizeEmail(user.email),
+      },
+      { $set: { read: Boolean(input.read) } },
+    );
+    return json({ updated: result.modifiedCount });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

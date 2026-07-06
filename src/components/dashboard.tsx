@@ -632,6 +632,10 @@ export function Dashboard() {
             await api(`/api/notifications/${id}`, { method: "PATCH", body: JSON.stringify({ read }) });
             await loadNotifications();
           }}
+          onReadMany={async (ids, read) => {
+            await api("/api/notifications", { method: "PATCH", body: JSON.stringify({ ids, read }) });
+            await loadNotifications();
+          }}
           onReadAll={async () => {
             await api("/api/notifications/read-all", { method: "POST" });
             await loadNotifications();
@@ -741,6 +745,7 @@ function NotificationDrawer({
   onClose,
   onOpenEntity,
   onRead,
+  onReadMany,
   onReadAll,
   onDelete,
   onDeleteMany,
@@ -752,6 +757,7 @@ function NotificationDrawer({
   onClose: () => void;
   onOpenEntity: (category: AppNotification["category"]) => void;
   onRead: (id: string, read: boolean) => Promise<void>;
+  onReadMany: (ids: string[], read: boolean) => Promise<void>;
   onReadAll: () => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onDeleteMany: (ids: string[]) => Promise<void>;
@@ -768,6 +774,8 @@ function NotificationDrawer({
   const visibleIds = notifications.map((notification) => notification._id);
   const selectedSet = new Set(selectedIds);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
+  const unreadVisible = notifications.filter((notification) => !notification.read).length;
+  const failedEmails = notifications.filter((notification) => notification.emailStatus === "failed").length;
 
   function toggleSelected(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -792,6 +800,13 @@ function NotificationDrawer({
     setSelecting(false);
   }
 
+  async function markSelected(read: boolean) {
+    if (selectedIds.length === 0) return;
+    await onReadMany(selectedIds, read);
+    setSelectedIds([]);
+    setSelecting(false);
+  }
+
   return (
     <div className="fixed inset-0 z-[70]">
       <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close notifications" />
@@ -807,6 +822,11 @@ function NotificationDrawer({
           </ActionButton>
         </div>
         <div className="space-y-3 border-b border-stone-200 p-3">
+          <div className="grid grid-cols-3 gap-2">
+            <NotificationCounter label="Visible" value={notifications.length} />
+            <NotificationCounter label="Unread" value={unreadVisible} tone={unreadVisible > 0 ? "warn" : "neutral"} />
+            <NotificationCounter label="Email failed" value={failedEmails} tone={failedEmails > 0 ? "bad" : "neutral"} />
+          </div>
           <div className="flex flex-wrap gap-2">
             {filters.map((item) => (
               <ActionButton
@@ -814,7 +834,11 @@ function NotificationDrawer({
                 type="button"
                 variant={filter === item.id ? "primary" : "secondary"}
                 className="min-h-9 px-3 text-xs"
-                onClick={() => onFilter(item.id)}
+                onClick={() => {
+                  setSelectedIds([]);
+                  setSelecting(false);
+                  onFilter(item.id);
+                }}
               >
                 {item.label}
               </ActionButton>
@@ -831,7 +855,7 @@ function NotificationDrawer({
                   setSelectedIds([]);
                 }}
               >
-                {selecting ? "Cancel selection" : "Select"}
+                {selecting ? "Cancel selection" : "Select messages"}
               </ActionButton>
               {selecting && (
                 <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" onClick={toggleAllVisible} disabled={notifications.length === 0}>
@@ -846,9 +870,17 @@ function NotificationDrawer({
           {selecting && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-stone-200 bg-stone-50 p-2">
               <span className="text-xs font-medium text-stone-600">{selectedIds.length} selected</span>
-              <ActionButton type="button" variant="ghost" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void deleteSelected()}>
-                Delete selected
-              </ActionButton>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void markSelected(true)}>
+                  Mark read
+                </ActionButton>
+                <ActionButton type="button" variant="secondary" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void markSelected(false)}>
+                  Mark unread
+                </ActionButton>
+                <ActionButton type="button" variant="ghost" className="min-h-9 px-3 text-xs" disabled={selectedIds.length === 0} onClick={() => void deleteSelected()}>
+                  Delete
+                </ActionButton>
+              </div>
             </div>
           )}
         </div>
@@ -865,10 +897,11 @@ function NotificationDrawer({
                     aria-label={`Select notification: ${notification.title}`}
                   />
                 )}
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? "Read" : "Unread"}</Badge>
-                    <Badge tone={notification.emailStatus === "failed" ? "bad" : notification.emailStatus === "sent" ? "good" : "neutral"}>Email {notification.emailStatus}</Badge>
+                    {notification.priority === "high" && <Badge tone="bad">High priority</Badge>}
+                    <Badge tone={notification.emailStatus === "failed" ? "bad" : notification.emailStatus === "sent" ? "good" : "neutral"}>{notification.emailStatus === "skipped" ? "In-app only" : `Email ${notification.emailStatus}`}</Badge>
                   </div>
                   <h3 className="mt-2 font-semibold">{notification.title}</h3>
                   <p className="mt-1 whitespace-pre-line text-sm leading-6 text-stone-600">{notification.message}</p>
@@ -878,7 +911,7 @@ function NotificationDrawer({
               </div>
               {!selecting && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>Open context</ActionButton>
+                  <ActionButton variant="secondary" onClick={() => onOpenEntity(notification.category)}>{notificationContextLabel(notification.category)}</ActionButton>
                   <ActionButton variant="ghost" onClick={() => void onRead(notification._id, !notification.read)}>
                     Mark {notification.read ? "unread" : "read"}
                   </ActionButton>
@@ -899,6 +932,29 @@ function NotificationDrawer({
       </aside>
     </div>
   );
+}
+
+function NotificationCounter({ label, value, tone = "neutral" }: { label: string; value: number; tone?: Tone }) {
+  const tones = {
+    neutral: "border-stone-200 bg-stone-50 text-stone-800",
+    good: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    warn: "border-amber-200 bg-amber-50 text-amber-900",
+    bad: "border-red-200 bg-red-50 text-red-900",
+  };
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function notificationContextLabel(category: AppNotification["category"]) {
+  if (category === "accounts" || category === "users") return "Open users";
+  if (category === "tickets" || category === "requests") return "Open requests";
+  if (category === "events" || category === "outlets") return "Open setup";
+  if (category === "reports") return "Open reports";
+  return "Open workspace";
 }
 
 const kpiTones = {
