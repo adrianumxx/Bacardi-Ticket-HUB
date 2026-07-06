@@ -1257,7 +1257,9 @@ export function Dashboard() {
             </div>
             <p className="max-w-2xl text-sm leading-6 text-stone-600">
               {isWorkspaceManager(role)
-                ? "Run the workspace cockpit: requests, events, users, reporting, notifications, and audit visibility."
+                ? isSuperAdmin(role)
+                  ? "Run the workspace cockpit: requests, events, users, reporting, notifications, and audit visibility."
+                  : "Run the workspace cockpit: requests, events, reporting, notifications, and ticket dispatch."
                 : "Create ticket requests and track approvals from one place."}
             </p>
           </div>
@@ -1307,7 +1309,7 @@ export function Dashboard() {
           )}
           {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
-          {currentTab === "audit" && <AuditPanel />}
+          {currentTab === "audit" && isSuperAdmin(role) && <AuditPanel />}
           {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
           {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
           {currentTab === "settings" && <SettingsPanel notify={showNotice} onDone={refresh} />}
