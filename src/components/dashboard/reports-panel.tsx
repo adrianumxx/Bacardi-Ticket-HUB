@@ -26,8 +26,12 @@ import {
   StatusBreakdownChart,
   TicketsOverTimeChart,
 } from "./charts";
+import { useTranslation } from "@/lib/i18n/LanguageProvider";
+import { localeMap } from "@/lib/i18n/translations";
 
 export function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const top = rows.slice(0, 3);
   const maxRequests = Math.max(...rows.map((row) => row.requests), 1);
   const totals = rows.reduce(
@@ -42,32 +46,32 @@ export function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
   return (
     <section className="grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
       <div className="rounded-md border border-[#3A2A18] bg-[#3A2A18] p-5 text-white shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ECDFC8]">Manager performance</p>
-        <h2 className="mt-2 text-2xl font-semibold">Requests by account manager</h2>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ECDFC8]">{t("reports.managerPerformance")}</p>
+        <h2 className="mt-2 text-2xl font-semibold">{t("reports.requestsByManager")}</h2>
         <div className="mt-5 grid grid-cols-3 gap-3">
-          <MiniStat label="Managers" value={totals.managers} />
-          <MiniStat label="Tickets" value={totals.tickets} />
-          <MiniStat label="Outlets" value={totals.outlets} />
+          <MiniStat label={t("reports.managers")} value={totals.managers} />
+          <MiniStat label={t("reports.tickets")} value={totals.tickets} />
+          <MiniStat label={t("reports.outlets")} value={totals.outlets} />
         </div>
         <div className="mt-5 space-y-3">
           {top.map((row) => (
             <div key={row.email}>
               <div className="mb-1 flex items-center justify-between gap-3 text-sm">
                 <span className="truncate font-medium">{row.name}</span>
-                <span className="text-[#ECDFC8]">{row.requests} requests</span>
+                <span className="text-[#ECDFC8]">{t("reports.requestsCount", { count: row.requests })}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-white/15">
                 <div className="h-full rounded-full bg-[#ECDFC8]" style={{ width: `${Math.max(8, (row.requests / maxRequests) * 100)}%` }} />
               </div>
             </div>
           ))}
-          {top.length === 0 && <p className="text-sm text-white/70">No manager activity yet.</p>}
+          {top.length === 0 && <p className="text-sm text-white/70">{t("reports.noManagerActivity")}</p>}
         </div>
       </div>
 
       <div className="overflow-hidden rounded-md border border-stone-250 bg-white shadow-sm">
         <div className="border-b border-stone-200 px-4 py-3">
-          <h2 className="text-lg font-semibold">Account manager breakdown</h2>
+          <h2 className="text-lg font-semibold">{t("reports.managerBreakdown")}</h2>
         </div>
         <div className="divide-y">
           {rows.map((row) => (
@@ -75,22 +79,22 @@ export function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
               <div>
                 <p className="font-medium">{row.name}</p>
                 <p className="break-words text-xs text-stone-500">{row.email}</p>
-                <p className="mt-2 text-xs text-stone-500">Latest request: {row.latestRequest ? formatShortDate(row.latestRequest) : "-"}</p>
+                <p className="mt-2 text-xs text-stone-500">{t("reports.latestRequest", { date: row.latestRequest ? formatShortDate(row.latestRequest, locale) : "-" })}</p>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <MiniMetric label="Requests" value={row.requests} />
-                <MiniMetric label="Tickets" value={row.tickets} />
-                <MiniMetric label="Approved" value={row.approved} tone="good" />
-                <MiniMetric label="Pending" value={row.pending} tone="warn" />
-                <MiniMetric label="Rejected" value={row.rejected} tone="bad" />
-                <MiniMetric label="Outlets" value={row.outlets.size} />
+                <MiniMetric label={t("reports.requests")} value={row.requests} />
+                <MiniMetric label={t("reports.tickets")} value={row.tickets} />
+                <MiniMetric label={t("reports.approved")} value={row.approved} tone="good" />
+                <MiniMetric label={t("reports.pending")} value={row.pending} tone="warn" />
+                <MiniMetric label={t("reports.rejected")} value={row.rejected} tone="bad" />
+                <MiniMetric label={t("reports.outlets")} value={row.outlets.size} />
               </div>
-              <p className="text-stone-600 xl:col-span-2">Outlets: {mapSummary(row.outlets, "No outlets")}</p>
-              <p className="text-stone-600 xl:col-span-2">Events/Festivals: {mapSummary(row.events, "No events")}</p>
+              <p className="text-stone-600 xl:col-span-2">{t("reports.outletsSummary", { summary: mapSummary(row.outlets, t("reports.noOutlets")) })}</p>
+              <p className="text-stone-600 xl:col-span-2">{t("reports.eventsSummary", { summary: mapSummary(row.events, t("reports.noEvents")) })}</p>
             </article>
           ))}
         </div>
-        {rows.length === 0 && <EmptyState text="No account manager statistics are available yet." />}
+        {rows.length === 0 && <EmptyState text={t("reports.noManagerStats")} />}
       </div>
     </section>
   );
@@ -98,11 +102,12 @@ export function ManagerAnalytics({ rows }: { rows: ManagerStat[] }) {
 
 
 export function FlowMap() {
+  const { t } = useTranslation();
   const steps = [
-    ["1", "Request", "Account manager selects event, outlet, ticket type, quantity, and recipients."],
-    ["2", "Review", "Manager checks rules, edits details, and confirms the final status."],
-    ["3", "Approval", "Request is approved, partially approved, or rejected with notes."],
-    ["4", "Send", "Open an email draft, attach ticket files in the official mailbox, and record the dispatch."],
+    ["1", t("reports.step1Title"), t("reports.step1Text")],
+    ["2", t("reports.step2Title"), t("reports.step2Text")],
+    ["3", t("reports.step3Title"), t("reports.step3Text")],
+    ["4", t("reports.step4Title"), t("reports.step4Text")],
   ];
 
   return (
@@ -110,7 +115,7 @@ export function FlowMap() {
       <div className="grid gap-3 md:grid-cols-4">
         {steps.map(([number, title, text]) => (
           <div key={number} className="border-l-2 border-[#ECDFC8] pl-3">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#EB6A1C]">Step {number}</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[#EB6A1C]">{t("reports.step", { number })}</span>
             <h3 className="mt-1 font-semibold">{title}</h3>
             <p className="mt-1 text-sm leading-6 text-stone-600">{text}</p>
           </div>
@@ -134,6 +139,8 @@ export function ManagerDrilldownPanel({
   onExportCsv: (rows: ReportRow[], scope: string) => void;
   onExportPdf: (rows: ReportRow[], scope: string) => void;
 }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const managerRows = useMemo(() => rows.filter((row) => String(row.accountManagerEmail || row.accountManager || "Unknown manager").trim() === manager), [manager, rows]);
   const summary = useMemo(() => buildManagerSummaries(managerRows)[0], [managerRows]);
   const festivals = useMemo(() => {
@@ -185,23 +192,23 @@ export function ManagerDrilldownPanel({
 
   return (
     <div className="fixed inset-0 z-[75]">
-      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close account manager report" />
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("reports.closeReport")} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-stone-200 bg-[#FFFCF6] shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Account manager report</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("reports.accountManagerReport")}</p>
             <h2 className="mt-1 truncate text-xl font-semibold">{summary?.manager || manager}</h2>
             {summary?.email && summary.email !== summary.manager && <p className="mt-0.5 truncate text-xs text-stone-500">{summary.email}</p>}
-            <p className="mt-1 text-sm text-stone-600">Filtered report by festival/event, outlet, status, and dispatch activity.</p>
+            <p className="mt-1 text-sm text-stone-600">{t("reports.filteredReportDescription")}</p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
             <ActionButton type="button" variant="secondary" onClick={() => onExportCsv(managerRows, `manager-${summary?.manager || manager}`)}>
-              <Download size={14} /> CSV
+              <Download size={14} /> {t("reports.csv")}
             </ActionButton>
             <ActionButton type="button" variant="secondary" onClick={() => onExportPdf(managerRows, `manager-${summary?.manager || manager}`)}>
-              <Download size={14} /> PDF
+              <Download size={14} /> {t("reports.pdf")}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label={t("reports.closeReport")}>
               <X size={18} />
             </ActionButton>
           </div>
@@ -210,15 +217,15 @@ export function ManagerDrilldownPanel({
           {summary ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <InsightMetric label="Requests" value={summary.requests} detail="Created in the current filters." />
-                <InsightMetric label="Tickets requested" value={summary.tickets} detail={`${summary.approvedTickets} approved ticket(s).`} tone="good" />
-                <InsightMetric label="Pending / rejected" value={`${summary.pending} / ${summary.rejected}`} detail="Items needing attention or declined." tone={summary.pending > 0 ? "warn" : "neutral"} />
-                <InsightMetric label="Dispatches" value={summary.dispatches} detail={`Latest activity ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
+                <InsightMetric label={t("reports.requests")} value={summary.requests} detail={t("reports.requestsDetail")} />
+                <InsightMetric label={t("reports.ticketsRequested")} value={summary.tickets} detail={t("reports.approvedTicketsDetail", { count: summary.approvedTickets })} tone="good" />
+                <InsightMetric label={t("reports.pendingRejected")} value={`${summary.pending} / ${summary.rejected}`} detail={t("reports.pendingRejectedDetail")} tone={summary.pending > 0 ? "warn" : "neutral"} />
+                <InsightMetric label={t("reports.dispatches")} value={summary.dispatches} detail={t("reports.latestActivity", { date: summary.latest ? formatShortDate(summary.latest, locale) : "-" })} />
               </div>
 
               <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold">Festival and event breakdown</h3>
-                <p className="mt-0.5 text-xs text-stone-500">Each block shows what this account manager requested for a specific festival/event.</p>
+                <h3 className="text-sm font-semibold">{t("reports.festivalEventBreakdown")}</h3>
+                <p className="mt-0.5 text-xs text-stone-500">{t("reports.festivalEventBreakdownDetail")}</p>
                 <div className="mt-4 space-y-3">
                   {festivals.map((festival) => (
                     <div key={festival.key} className="rounded-md border border-stone-200 p-3">
@@ -228,14 +235,14 @@ export function ManagerDrilldownPanel({
                             <h4 className="truncate font-semibold text-stone-950">{festival.event}</h4>
                             <Badge tone={festival.eventKind === "Festival" ? "warn" : "neutral"}>{festival.eventKind}</Badge>
                           </div>
-                          <p className="mt-1 text-xs text-stone-500">{festival.outlets.size} outlet(s) · latest {festival.latest ? formatShortDate(festival.latest) : "-"}</p>
+                          <p className="mt-1 text-xs text-stone-500">{t("reports.outletsCount", { count: festival.outlets.size, date: festival.latest ? formatShortDate(festival.latest, locale) : "-" })}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <Badge tone="neutral">{festival.requested} requested</Badge>
-                          <Badge tone="good">{festival.approvedTickets} approved</Badge>
-                          <Badge tone={festival.pending > 0 ? "warn" : "neutral"}>{festival.pending} pending</Badge>
-                          <Badge tone={festival.rejected > 0 ? "bad" : "neutral"}>{festival.rejected} rejected</Badge>
-                          <Badge tone="neutral">{festival.dispatches} dispatches</Badge>
+                          <Badge tone="neutral">{t("reports.requestedBadge", { count: festival.requested })}</Badge>
+                          <Badge tone="good">{t("reports.approvedBadge", { count: festival.approvedTickets })}</Badge>
+                          <Badge tone={festival.pending > 0 ? "warn" : "neutral"}>{t("reports.pendingBadge", { count: festival.pending })}</Badge>
+                          <Badge tone={festival.rejected > 0 ? "bad" : "neutral"}>{t("reports.rejectedBadge", { count: festival.rejected })}</Badge>
+                          <Badge tone="neutral">{t("reports.dispatchesBadge", { count: festival.dispatches })}</Badge>
                         </div>
                       </div>
                     </div>
@@ -244,16 +251,16 @@ export function ManagerDrilldownPanel({
               </section>
 
               <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold">Request details</h3>
+                <h3 className="text-sm font-semibold">{t("reports.requestDetails")}</h3>
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="border-b text-stone-600">
-                      <tr><th className="py-2">Date</th><th>Festival/Event</th><th>Outlet</th><th>Ticket types</th><th>Status</th><th>Dispatches</th></tr>
+                      <tr><th className="py-2">{t("reports.date")}</th><th>{t("reports.festivalEvent")}</th><th>{t("reports.outlet")}</th><th>{t("reports.ticketTypes")}</th><th>{t("reports.status")}</th><th>{t("reports.dispatches")}</th></tr>
                     </thead>
                     <tbody className="divide-y">
                       {managerRows.map((row) => (
                         <tr key={String(row.id)}>
-                          <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt)) : "-"}</td>
+                          <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt), locale) : "-"}</td>
                           <td>{row.event}</td>
                           <td>{row.outlet}</td>
                           <td>{row.ticketTypes}</td>
@@ -267,7 +274,7 @@ export function ManagerDrilldownPanel({
               </section>
             </>
           ) : (
-            <EmptyState text="No activity for this account manager in the current filters." />
+            <EmptyState text={t("reports.noManagerActivityFiltered")} />
           )}
         </div>
       </aside>
@@ -288,13 +295,15 @@ export function ReportFocusPanel({
   onExportCsv: (rows: ReportRow[], scope: string) => void;
   onExportPdf: (rows: ReportRow[], scope: string) => void;
 }) {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const focusRows = useMemo(
     () => rows.filter((row) => String(row[focus.kind] || "").trim() === focus.label),
     [focus, rows],
   );
   const summary = useMemo(() => summarizeReportRows(focusRows), [focusRows]);
   const breakdownKey = focus.kind === "event" ? "accountManager" : "event";
-  const breakdownTitle = focus.kind === "event" ? "Account managers" : "Events and festivals";
+  const breakdownTitle = focus.kind === "event" ? t("reports.accountManagers") : t("reports.eventsAndFestivals");
   const breakdown = useMemo(() => rankedTotals(focusRows, breakdownKey, "quantity", 8), [breakdownKey, focusRows]);
 
   useEffect(() => {
@@ -307,48 +316,48 @@ export function ReportFocusPanel({
 
   return (
     <div className="fixed inset-0 z-[75]">
-      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label="Close report detail" />
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("reports.closeReportDetail")} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-stone-200 bg-[#FFFCF6] shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{focus.kind === "event" ? "Event report" : "Outlet report"}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{focus.kind === "event" ? t("reports.eventReport") : t("reports.outletReport")}</p>
             <h2 className="mt-1 truncate text-xl font-semibold">{focus.label}</h2>
-            <p className="mt-1 text-sm text-stone-600">Detail from the current report filters.</p>
+            <p className="mt-1 text-sm text-stone-600">{t("reports.detailFromFilters")}</p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
             <ActionButton type="button" variant="secondary" onClick={() => onExportCsv(focusRows, `${focus.kind}-${focus.label}`)}>
-              <Download size={14} /> CSV
+              <Download size={14} /> {t("reports.csv")}
             </ActionButton>
             <ActionButton type="button" variant="secondary" onClick={() => onExportPdf(focusRows, `${focus.kind}-${focus.label}`)}>
-              <Download size={14} /> PDF
+              <Download size={14} /> {t("reports.pdf")}
             </ActionButton>
-            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label="Close report">
+            <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={onClose} aria-label={t("reports.closeReport")}>
               <X size={18} />
             </ActionButton>
           </div>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <InsightMetric label="Requests" value={summary.requests} detail="Rows in the current filters." />
-            <InsightMetric label="Tickets" value={summary.tickets} detail={`${summary.approvedTickets} approved ticket(s).`} tone="good" />
-            <InsightMetric label="Pending / rejected" value={`${summary.pending} / ${summary.rejected}`} detail="Open or declined requests." tone={summary.pending > 0 ? "warn" : "neutral"} />
-            <InsightMetric label="Dispatches" value={summary.dispatches} detail={`Latest ${summary.latest ? formatShortDate(summary.latest) : "-"}.`} />
+            <InsightMetric label={t("reports.requests")} value={summary.requests} detail={t("reports.rowsInFilters")} />
+            <InsightMetric label={t("reports.tickets")} value={summary.tickets} detail={t("reports.approvedTicketsDetail", { count: summary.approvedTickets })} tone="good" />
+            <InsightMetric label={t("reports.pendingRejected")} value={`${summary.pending} / ${summary.rejected}`} detail={t("reports.openDeclined")} tone={summary.pending > 0 ? "warn" : "neutral"} />
+            <InsightMetric label={t("reports.dispatches")} value={summary.dispatches} detail={t("reports.latest", { date: summary.latest ? formatShortDate(summary.latest, locale) : "-" })} />
           </div>
           <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
             <h3 className="text-sm font-semibold">{breakdownTitle}</h3>
-            <ReportBreakdownList data={breakdown} emptyText="No breakdown data in the current filters." />
+            <ReportBreakdownList data={breakdown} emptyText={t("reports.noBreakdownData")} />
           </section>
           <section className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-            <h3 className="text-sm font-semibold">Request details</h3>
+            <h3 className="text-sm font-semibold">{t("reports.requestDetails")}</h3>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-sm">
                 <thead className="border-b text-stone-600">
-                  <tr><th className="py-2">Date</th><th>Event/Festival</th><th>Outlet</th><th>Account manager</th><th>Status</th><th>Tickets</th><th>Dispatches</th></tr>
+                  <tr><th className="py-2">{t("reports.date")}</th><th>{t("reports.eventFestival")}</th><th>{t("reports.outlet")}</th><th>{t("reports.accountManager")}</th><th>{t("reports.status")}</th><th>{t("reports.ticketsCol")}</th><th>{t("reports.dispatches")}</th></tr>
                 </thead>
                 <tbody className="divide-y">
                   {focusRows.map((row) => (
                     <tr key={String(row.id)}>
-                      <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt)) : "-"}</td>
+                      <td className="py-3">{row.createdAt ? formatShortDate(String(row.createdAt), locale) : "-"}</td>
                       <td>{row.event}</td>
                       <td>{row.outlet}</td>
                       <td>{row.accountManager}</td>
@@ -399,6 +408,7 @@ export function AnalyticsSection({
   onSelectManager: (manager: string) => void;
   onSelectFocus: (focus: ReportFocus) => void;
 }) {
+  const { t } = useTranslation();
   const totalRequests = rows.length;
   const totalTickets = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
   const totalDispatches = rows.reduce((sum, row) => sum + Number(row.dispatches || 0), 0);
@@ -412,10 +422,10 @@ export function AnalyticsSection({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <InsightMetric label="Approval rate" value={`${approvalRate}%`} detail={`${approved} approved or partially approved of ${totalRequests} request${totalRequests === 1 ? "" : "s"}.`} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
-        <InsightMetric label="Average tickets" value={avgTickets} detail="Requested tickets per request in the current filter." />
-        <InsightMetric label="Pending queue" value={pending} detail="Requests still waiting for a manager decision." tone={pending > 0 ? "warn" : "good"} />
-        <InsightMetric label="Dispatches" value={totalDispatches} detail="Manual or system dispatch records for approved ticket workflows." />
+        <InsightMetric label={t("reports.approvalRate")} value={`${approvalRate}%`} detail={t("reports.approvalRateDetail", { approved, total: totalRequests, plural: totalRequests === 1 ? "" : "s" })} tone={approvalRate >= 70 ? "good" : approvalRate >= 35 ? "warn" : "neutral"} />
+        <InsightMetric label={t("reports.averageTickets")} value={avgTickets} detail={t("reports.averageTicketsDetail")} />
+        <InsightMetric label={t("reports.pendingQueue")} value={pending} detail={t("reports.pendingQueueDetail")} tone={pending > 0 ? "warn" : "good"} />
+        <InsightMetric label={t("reports.dispatches")} value={totalDispatches} detail={t("reports.dispatchesDetail")} />
       </div>
       <div className="grid gap-4 xl:grid-cols-[1.45fr_1fr]">
         <TicketsOverTimeChart rows={rows} />
@@ -423,23 +433,23 @@ export function AnalyticsSection({
       </div>
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <RankedBarChart
-          title="Tickets by account manager"
-          subtitle="Top requesters by ticket volume in the current filters."
+          title={t("reports.ticketsByManager")}
+          subtitle={t("reports.ticketsByManagerSubtitle")}
           data={rankedTotals(rows, "accountManager")}
-          emptyText="No account manager activity in the current filters."
+          emptyText={t("reports.noManagerFiltered")}
         />
         <RankedBarChart
-          title="Tickets by outlet"
-          subtitle="Which clients are requesting the most tickets."
+          title={t("reports.ticketsByOutlet")}
+          subtitle={t("reports.ticketsByOutletSubtitle")}
           data={rankedTotals(rows, "outlet")}
-          emptyText="No outlet activity in the current filters."
+          emptyText={t("reports.noOutletFiltered")}
           onSelect={(label) => onSelectFocus({ kind: "outlet", label })}
         />
         <RankedBarChart
-          title="Clients invited the most"
-          subtitle="Outlets with the most recorded ticket dispatches."
+          title={t("reports.clientsInvitedMost")}
+          subtitle={t("reports.clientsInvitedMostSubtitle")}
           data={rankedTotals(rows, "outlet", "dispatches")}
-          emptyText="No ticket dispatches have been recorded in the current filters."
+          emptyText={t("reports.noDispatchesFiltered")}
           onSelect={(label) => onSelectFocus({ kind: "outlet", label })}
         />
       </div>
@@ -449,9 +459,9 @@ export function AnalyticsSection({
       </div>
       <ManagerActivityMatrix rows={rows} selectedManager={selectedManager} onSelectManager={onSelectManager} />
       <div className="grid gap-3 sm:grid-cols-3">
-        <Kpi label="Tickets Requested" value={totalTickets} icon={Ticket} tone="gold" />
-        <Kpi label="Account Managers" value={uniqueManagers} icon={Users} tone="neutral" />
-        <Kpi label="Outlets Involved" value={uniqueOutlets} icon={Store} tone="neutral" />
+        <Kpi label={t("reports.ticketsRequestedKpi")} value={totalTickets} icon={Ticket} tone="gold" />
+        <Kpi label={t("reports.accountManagersKpi")} value={uniqueManagers} icon={Users} tone="neutral" />
+        <Kpi label={t("reports.outletsInvolvedKpi")} value={uniqueOutlets} icon={Store} tone="neutral" />
       </div>
     </div>
   );
@@ -459,6 +469,8 @@ export function AnalyticsSection({
 
 
 export function ReportsPanel() {
+  const { t, language } = useTranslation();
+  const locale = localeMap[language];
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [reportSearch, setReportSearch] = useState("");
@@ -472,11 +484,11 @@ export function ReportsPanel() {
   const filteredRows = useMemo(
     () =>
       rows.filter((row) => {
-        const matchesStatus = statusFilter === "all" || String(row.status) === renderRequestStatus(statusFilter);
+        const matchesStatus = statusFilter === "all" || String(row.status) === renderRequestStatus(statusFilter, t);
         const haystack = [row.event, row.eventKind, row.market, row.outlet, row.accountManager, row.accountManagerEmail, row.status].join(" ").toLowerCase();
         return matchesStatus && haystack.includes(reportSearch.toLowerCase());
       }),
-    [reportSearch, rows, statusFilter],
+    [reportSearch, rows, statusFilter, t],
   );
 
   const reportParams = useCallback((extra?: Record<string, string>) => {
@@ -499,7 +511,7 @@ export function ReportsPanel() {
       const doc = new jsPDF({ unit: "pt" });
       const summary = summarizeReportRows(exportRows);
       const filename = reportFilename(scope, "pdf");
-      const title = scope === "workspace-report" ? "Bacardi Ticket Hub Report" : `Bacardi Ticket Hub · ${scope.replace(/-/g, " ")}`;
+      const title = scope === "workspace-report" ? t("reports.workspaceReportTitle") : `Bacardi Ticket Hub · ${scope.replace(/-/g, " ")}`;
 
       doc.setFillColor(58, 42, 24);
       doc.rect(0, 0, 595, 88, "F");
@@ -507,17 +519,17 @@ export function ReportsPanel() {
       doc.setFontSize(18);
       doc.text(title, 40, 38);
       doc.setFontSize(9);
-      doc.text(`Generated ${formatDate(new Date().toISOString())}`, 40, 58);
+      doc.text(t("reports.reportGenerated", { date: formatDate(new Date().toISOString(), locale) }), 40, 58);
       doc.setTextColor(236, 223, 200);
-      doc.text(`Rows ${exportRows.length} · Status ${statusFilter === "all" ? "All" : renderRequestStatus(statusFilter)} · Search ${reportSearch || "None"}`, 40, 74);
+      doc.text(t("reports.reportSummary", { count: exportRows.length, status: statusFilter === "all" ? t("reports.all") : renderRequestStatus(statusFilter, t), search: reportSearch || t("reports.none") }), 40, 74);
 
       doc.setTextColor(58, 42, 24);
       doc.setFontSize(11);
       const metrics = [
-        `Requests: ${summary.requests}`,
-        `Tickets: ${summary.tickets}`,
-        `Approved tickets: ${summary.approvedTickets}`,
-        `Dispatches: ${summary.dispatches}`,
+        `${t("reports.requests")}: ${summary.requests}`,
+        `${t("reports.tickets")}: ${summary.tickets}`,
+        `${t("reports.approved")} ${t("reports.tickets").toLowerCase()}: ${summary.approvedTickets}`,
+        `${t("reports.dispatches")}: ${summary.dispatches}`,
       ];
       metrics.forEach((metric, index) => {
         doc.setFillColor(255, 252, 246);
@@ -526,7 +538,7 @@ export function ReportsPanel() {
       });
 
       autoTable.default(doc, {
-        head: [["Event/Festival", "Type", "Outlet", "Account Manager", "Status", "Tickets", "Approved", "Dispatches"]],
+        head: [[t("reports.eventFestival"), t("reports.type"), t("reports.outlet"), t("reports.accountManager"), t("reports.status"), t("reports.ticketsCol"), t("reports.approved"), t("reports.dispatches")]],
         body: exportRows.map((row) => [row.event, row.eventKind, row.outlet, row.accountManager, row.status, row.quantity, row.approved, row.dispatches]),
         startY: 178,
         styles: { fontSize: 8, cellPadding: 5 },
@@ -534,9 +546,9 @@ export function ReportsPanel() {
         alternateRowStyles: { fillColor: [255, 252, 246] },
       });
       doc.save(filename);
-      setExportNotice({ message: `PDF exported: ${filename}`, tone: "good" });
+      setExportNotice({ message: t("reports.pdfExported", { filename }), tone: "good" });
     } catch (error) {
-      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
+      setExportNotice({ message: error instanceof Error ? error.message : t("reports.unableToExportPdf"), tone: "bad" });
     } finally {
       setExporting("");
     }
@@ -545,7 +557,7 @@ export function ReportsPanel() {
   function exportCsvRows(exportRows: ReportRow[], scope: string) {
     const filename = reportFilename(scope, "csv");
     downloadTextFile(reportCsv(exportRows), filename, "text/csv;charset=utf-8");
-    setExportNotice({ message: `CSV exported: ${filename}`, tone: "good" });
+    setExportNotice({ message: t("reports.csvExported", { filename }), tone: "good" });
   }
 
   const load = useCallback(async () => {
@@ -555,18 +567,18 @@ export function ReportsPanel() {
       const data = await api<{ rows: ReportRow[] }>(`/api/reports?${params.toString()}`);
       setRows(data.rows);
     } catch (error) {
-      setExportNotice({ message: error instanceof Error ? error.message : "Unable to load the report.", tone: "bad" });
+      setExportNotice({ message: error instanceof Error ? error.message : t("reports.unableToLoadReport"), tone: "bad" });
     } finally {
       setLoadingReport(false);
     }
-  }, [reportParams]);
+  }, [reportParams, t]);
 
   async function exportPdf() {
     try {
       await api(`/api/reports?${reportParams({ export: "pdf" }).toString()}`);
       await exportPdfRows(filteredRows, "workspace-report");
     } catch (error) {
-      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export the PDF.", tone: "bad" });
+      setExportNotice({ message: error instanceof Error ? error.message : t("reports.unableToExportPdf"), tone: "bad" });
     }
   }
 
@@ -576,8 +588,8 @@ export function ReportsPanel() {
     try {
       const response = await fetch(`/api/reports?${reportParams({ format: "csv" }).toString()}`);
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({ error: "Unable to export CSV." }));
-        setExportNotice({ message: payload.error || "Unable to export CSV.", tone: "bad" });
+        const payload = await response.json().catch(() => ({ error: t("reports.unableToExportCsv") }));
+        setExportNotice({ message: payload.error || t("reports.unableToExportCsv"), tone: "bad" });
         return;
       }
       const url = URL.createObjectURL(await response.blob());
@@ -586,9 +598,9 @@ export function ReportsPanel() {
       link.download = reportFilename("workspace-report", "csv");
       link.click();
       URL.revokeObjectURL(url);
-      setExportNotice({ message: `CSV exported: ${link.download}`, tone: "good" });
+      setExportNotice({ message: t("reports.csvExported", { filename: link.download }), tone: "good" });
     } catch (error) {
-      setExportNotice({ message: error instanceof Error ? error.message : "Unable to export CSV.", tone: "bad" });
+      setExportNotice({ message: error instanceof Error ? error.message : t("reports.unableToExportCsv"), tone: "bad" });
     } finally {
       setExporting("");
     }
@@ -606,40 +618,40 @@ export function ReportsPanel() {
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Filters</h2>
-            <p className="mt-1 text-sm text-stone-600">Drives the charts below and the request table.</p>
+            <h2 className="text-lg font-semibold">{t("reports.filters")}</h2>
+            <p className="mt-1 text-sm text-stone-600">{t("reports.filtersDescription")}</p>
           </div>
           <div className="flex gap-2">
             <ActionButton variant="secondary" disabled={Boolean(exporting)} onClick={() => void exportCsv()}>
-              <Download size={16} /> {exporting === "csv" ? "Exporting CSV..." : "CSV"}
+              <Download size={16} /> {exporting === "csv" ? t("reports.exportingCsv") : t("reports.csv")}
             </ActionButton>
             <ActionButton variant="secondary" disabled={Boolean(exporting)} onClick={() => void exportPdf()}>
-              <Download size={16} /> {exporting === "pdf" ? "Exporting PDF..." : "PDF"}
+              <Download size={16} /> {exporting === "pdf" ? t("reports.exportingPdf") : t("reports.pdf")}
             </ActionButton>
           </div>
         </div>
         {exportNotice && <div className="mt-4"><Notice message={exportNotice.message} tone={exportNotice.tone} /></div>}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[180px_1fr_180px_180px]">
-          <Field label="Status">
+          <Field label={t("reports.status")}>
             <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="partially_approved">Partially approved</option>
-              <option value="rejected">Rejected</option>
+              <option value="all">{t("reports.allStatuses")}</option>
+              <option value="pending">{t("reports.pending")}</option>
+              <option value="approved">{t("reports.approved")}</option>
+              <option value="partially_approved">{t("requests.partiallyApproved")}</option>
+              <option value="rejected">{t("reports.rejected")}</option>
             </select>
           </Field>
-          <Field label="Search report">
-            <input className={inputClass} value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} placeholder="Search event, outlet, market, account manager" />
+          <Field label={t("reports.searchReport")}>
+            <input className={inputClass} value={reportSearch} onChange={(event) => setReportSearch(event.target.value)} placeholder={t("reports.searchPlaceholder")} />
           </Field>
-          <Field label="From">
+          <Field label={t("reports.from")}>
             <input className={inputClass} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
           </Field>
-          <Field label="To">
+          <Field label={t("reports.to")}>
             <input className={inputClass} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           </Field>
         </div>
-        {loadingReport && <p className="mt-3 text-sm text-stone-500">Loading report...</p>}
+        {loadingReport && <p className="mt-3 text-sm text-stone-500">{t("reports.loadingReport")}</p>}
       </div>
 
       <AnalyticsSection rows={filteredRows} selectedManager={selectedManager} onSelectManager={setSelectedManager} onSelectFocus={setSelectedFocus} />
@@ -663,22 +675,22 @@ export function ReportsPanel() {
       )}
 
       <div className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Request report</h2>
+        <h2 className="text-lg font-semibold">{t("reports.requestReport")}</h2>
         <div className="mt-4 grid gap-3 lg:hidden">
           {filteredRows.map((row) => (
             <article key={String(row.id)} className="rounded-md border border-stone-200 bg-stone-50 p-3 text-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-stone-950">{row.event}</p>
-                  <p className="mt-0.5 text-xs text-stone-500">{row.eventKind} · {row.market || "No market"}</p>
+                  <p className="mt-0.5 text-xs text-stone-500">{row.eventKind} · {row.market || t("reports.noMarket")}</p>
                 </div>
                 <Badge tone={String(row.status) === "Rejected" ? "bad" : String(row.status) === "Pending" ? "warn" : "good"}>{String(row.status)}</Badge>
               </div>
               <div className="mt-3 grid gap-2 text-xs text-stone-600">
-                <p><strong>Outlet:</strong> {row.outlet || "-"}</p>
-                <p><strong>Account manager:</strong> {row.accountManager}</p>
+                <p><strong>{t("reports.outlet")}:</strong> {row.outlet || "-"}</p>
+                <p><strong>{t("reports.accountManager")}:</strong> {row.accountManager}</p>
                 {row.accountManagerEmail && row.accountManagerEmail !== row.accountManager && <p><strong>Email:</strong> {row.accountManagerEmail}</p>}
-                <p><strong>Tickets:</strong> {row.quantity} · <strong>Dispatches:</strong> {row.dispatches}</p>
+                <p><strong>{t("reports.ticketsCol")}:</strong> {row.quantity} · <strong>{t("reports.dispatches")}:</strong> {row.dispatches}</p>
               </div>
             </article>
           ))}
@@ -686,7 +698,7 @@ export function ReportsPanel() {
         <div className="mt-4 hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b text-stone-600">
-              <tr><th className="py-2">Event/Festival</th><th>Type</th><th>Market</th><th>Outlet</th><th>Account Manager</th><th>Status</th><th>Tickets</th><th>Dispatches</th></tr>
+              <tr><th className="py-2">{t("reports.eventFestival")}</th><th>{t("reports.type")}</th><th>{t("reports.market")}</th><th>{t("reports.outlet")}</th><th>{t("reports.accountManager")}</th><th>{t("reports.status")}</th><th>{t("reports.ticketsCol")}</th><th>{t("reports.dispatches")}</th></tr>
             </thead>
             <tbody className="divide-y">
               {filteredRows.map((row) => (
@@ -707,10 +719,8 @@ export function ReportsPanel() {
             </tbody>
           </table>
         </div>
-        {filteredRows.length === 0 && <EmptyState text={rows.length === 0 ? "No report rows are available yet." : "No report rows match the current filters."} />}
+        {filteredRows.length === 0 && <EmptyState text={rows.length === 0 ? t("reports.noRowsYet") : t("reports.noRowsMatch")} />}
       </div>
     </div>
   );
 }
-
-
