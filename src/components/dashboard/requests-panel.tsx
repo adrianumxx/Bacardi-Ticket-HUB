@@ -331,7 +331,7 @@ export function AdminRequests({
               quickFilter === filter ? "border-[#5B4228] bg-[#5B4228] text-white shadow-sm" : "border-[#ECDFC8] bg-white text-stone-700 hover:border-[#EB6A1C]"
             }`}
           >
-            {requestQuickFilterLabel(filter)}
+            {requestQuickFilterLabel(filter, t)}
           </button>
         ))}
       </div>
@@ -339,7 +339,7 @@ export function AdminRequests({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 shadow-sm">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#EB6A1C]">{t("requests.requestFilter")}</p>
-            <p className="text-sm font-medium text-stone-900">{requestQuickFilterLabel(quickFilter)}</p>
+            <p className="text-sm font-medium text-stone-900">{requestQuickFilterLabel(quickFilter, t)}</p>
           </div>
           <ActionButton type="button" variant="secondary" onClick={onClearQuickFilter}>{t("requests.backToAttention")}</ActionButton>
         </div>
@@ -784,7 +784,7 @@ export function DispatchList({
               <p className="break-words font-medium">
                 <Mail className="mr-1 inline" size={14} /> {dispatch.recipients.join(", ")}
               </p>
-              <Badge tone={dispatchTone(dispatch.status)}>{dispatchLabel(dispatch.status)}</Badge>
+              <Badge tone={dispatchTone(dispatch.status)}>{dispatchLabel(dispatch.status, t)}</Badge>
             </div>
             <p className="mt-1 text-stone-600">{dispatch.fileNames.join(", ") || t("requests.noFileNames")}</p>
             <p className="mt-1 text-xs text-stone-500">{formatDate(dispatch.at, locale)}</p>

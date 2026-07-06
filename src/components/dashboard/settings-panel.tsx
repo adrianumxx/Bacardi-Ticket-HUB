@@ -93,8 +93,8 @@ export function SettingsPanel({ notify, onDone }: { notify: (message: string, to
           </div>
           <Field label={t("settings.role")} hint={t("settings.roleHint")}>
             <div className="grid gap-2">
-              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
-              <p className="text-sm leading-6 text-stone-600">{roleDescription(role)}</p>
+              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role, t)}</Badge>
+              <p className="text-sm leading-6 text-stone-600">{roleDescription(role, t)}</p>
             </div>
           </Field>
           <div>

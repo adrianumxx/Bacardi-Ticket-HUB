@@ -175,7 +175,7 @@ export function NotificationDrawer({
                     <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? t("notifications.read") : t("notifications.unread")}</Badge>
                     {notification.priority === "high" && <Badge tone="bad">{t("notifications.highPriority")}</Badge>}
                     <Badge tone={dispatchTone(notification.emailStatus)}>
-                      {notification.emailStatus === "skipped" ? t("notifications.inAppOnly") : t("notifications.emailStatusPrefix", { status: dispatchLabel(notification.emailStatus) })}
+                      {notification.emailStatus === "skipped" ? t("notifications.inAppOnly") : t("notifications.emailStatusPrefix", { status: dispatchLabel(notification.emailStatus, t) })}
                     </Badge>
                   </div>
                   <h3 className="mt-2 font-semibold">{notification.title}</h3>

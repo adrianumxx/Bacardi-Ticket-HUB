@@ -130,9 +130,9 @@ export function UsersPanel({
         <Field label={t("users.email")}><input name="email" type="email" required className={inputClass} /></Field>
         <Field label={t("users.role")}>
           <select name="role" className={inputClass}>
-            <option value="account_manager">{roleLabel("account_manager")}</option>
-            <option value="workspace_manager">{roleLabel("workspace_manager")}</option>
-            <option value="super_admin">{roleLabel("super_admin")}</option>
+            <option value="account_manager">{roleLabel("account_manager", t)}</option>
+            <option value="workspace_manager">{roleLabel("workspace_manager", t)}</option>
+            <option value="super_admin">{roleLabel("super_admin", t)}</option>
           </select>
         </Field>
         <RoleModelNotice />
@@ -260,13 +260,13 @@ export function UserTable({
                     const nextRole = value as Role;
                     if (nextRole === user.role) return;
                     if (nextRole === "super_admin" && !window.confirm(t("users.promoteConfirm", { email: user.email }))) return;
-                    if (user.role === "super_admin" && !window.confirm(t("users.demoteConfirm", { email: user.email, role: roleLabel(nextRole) }))) return;
+                    if (user.role === "super_admin" && !window.confirm(t("users.demoteConfirm", { email: user.email, role: roleLabel(nextRole, t) }))) return;
                     void onUpdate(user.email, { role: nextRole, accessEnabled: true });
                   }}
                   options={[
-                    { value: "account_manager", label: roleShortLabel("account_manager") },
-                    { value: "workspace_manager", label: roleShortLabel("workspace_manager") },
-                    { value: "super_admin", label: roleShortLabel("super_admin") },
+                    { value: "account_manager", label: roleShortLabel("account_manager", t) },
+                    { value: "workspace_manager", label: roleShortLabel("workspace_manager", t) },
+                    { value: "super_admin", label: roleShortLabel("super_admin", t) },
                   ]}
                 />
                 {isSelf && <p className="mt-1 text-[11px] text-stone-400">{t("users.currentSession")}</p>}

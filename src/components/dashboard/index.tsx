@@ -251,7 +251,7 @@ export function Dashboard() {
           id: `user-${user.email}-${user.role}`,
           group: t("search.groupUsers"),
           title: user.name || user.email,
-          detail: `${user.email} · ${roleLabel(user.role)}`,
+          detail: `${user.email} · ${roleLabel(user.role, t)}`,
           tab: "users",
         });
       }
@@ -263,7 +263,7 @@ export function Dashboard() {
           id: `allowed-${user.email}-${user.role}`,
           group: t("search.groupUsers"),
           title: user.email,
-          detail: `${roleLabel(user.role)} · approved access`,
+          detail: `${roleLabel(user.role, t)} · approved access`,
           tab: "users",
         });
       }
@@ -354,7 +354,7 @@ export function Dashboard() {
               {sidebarCollapsed ? <PanelLeftOpen size={22} /> : <PanelLeftClose size={22} />}
             </ActionButton>
             <div className="glass-pill hidden items-center gap-2 rounded-full border border-stone-200/70 bg-white/70 px-3 py-2 sm:flex">
-              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
+              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role, t)}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
             <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => void refresh()} title={t("common.refresh")}>
@@ -456,7 +456,7 @@ export function Dashboard() {
 
             <div className={`border-t border-stone-200 p-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               <div className="glass-pill rounded-md bg-stone-50/70 p-3">
-                <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
+                <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role, t)}</Badge>
                 <p className="mt-2 truncate text-xs text-stone-500">{session?.user?.email}</p>
               </div>
             </div>

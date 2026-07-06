@@ -1,6 +1,40 @@
 import type { ManagerSummary, NotificationRecord, ReportRow, RequestQuickFilter, Role, TicketRequest, Tone } from "./types";
 import type { RequestStatus } from "@/lib/labels";
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+const identityT: TranslateFn = (key) => defaultLabels[key] ?? key;
+
+const defaultLabels: Record<string, string> = {
+  "role.superAdmin": "Super admin",
+  "role.workspaceManager": "Workspace manager",
+  "role.accountManager": "Account manager",
+  "role.unknown": "Unknown role",
+  "role.workspaceManagerShort": "Workspace mgr",
+  "role.accountManagerShort": "Account mgr",
+  "role.unknownShort": "Unknown",
+  "role.superAdminDescription": "Can control users, audit, platform governance, and all operational workflows.",
+  "role.workspaceManagerDescription": "Can manage daily operations: requests, events, outlets, reports, approvals, and ticket dispatch.",
+  "role.accountManagerDescription": "Can create ticket requests and follow their approval and dispatch status.",
+  "role.unknownDescription": "Role permissions are not available.",
+  "dispatch.sent": "Sent",
+  "dispatch.manual": "Manual",
+  "dispatch.simulated": "Simulated",
+  "dispatch.failed": "Failed",
+  "dispatch.skipped": "Skipped",
+  "dispatch.delivered": "Delivered",
+  "dispatch.bounced": "Bounced",
+  "dispatch.opened": "Opened",
+  "dispatch.clicked": "Clicked",
+  "dispatch.complained": "Complaint",
+  "dispatch.delivery_delayed": "Delayed",
+  "filter.attention": "Needs attention",
+  "filter.all": "All requests",
+  "filter.pending": "Pending requests",
+  "filter.approved_not_sent": "Approved without tickets sent",
+  "filter.email_failed": "Email failed",
+};
+
 export function isSuperAdmin(role?: Role) {
   return role === "super_admin";
 }
@@ -9,25 +43,25 @@ export function isWorkspaceManager(role?: Role) {
   return role === "super_admin" || role === "workspace_manager";
 }
 
-export function roleLabel(role?: Role) {
-  if (role === "super_admin") return "Super admin";
-  if (role === "workspace_manager") return "Workspace manager";
-  if (role === "account_manager") return "Account manager";
-  return "Unknown role";
+export function roleLabel(role?: Role, t: TranslateFn = identityT) {
+  if (role === "super_admin") return t("role.superAdmin");
+  if (role === "workspace_manager") return t("role.workspaceManager");
+  if (role === "account_manager") return t("role.accountManager");
+  return t("role.unknown");
 }
 
-export function roleShortLabel(role?: Role) {
-  if (role === "super_admin") return "Super admin";
-  if (role === "workspace_manager") return "Workspace mgr";
-  if (role === "account_manager") return "Account mgr";
-  return "Unknown";
+export function roleShortLabel(role?: Role, t: TranslateFn = identityT) {
+  if (role === "super_admin") return t("role.superAdmin");
+  if (role === "workspace_manager") return t("role.workspaceManagerShort");
+  if (role === "account_manager") return t("role.accountManagerShort");
+  return t("role.unknownShort");
 }
 
-export function roleDescription(role?: Role) {
-  if (role === "super_admin") return "Can control users, audit, platform governance, and all operational workflows.";
-  if (role === "workspace_manager") return "Can manage daily operations: requests, events, outlets, reports, approvals, and ticket dispatch.";
-  if (role === "account_manager") return "Can create ticket requests and follow their approval and dispatch status.";
-  return "Role permissions are not available.";
+export function roleDescription(role?: Role, t: TranslateFn = identityT) {
+  if (role === "super_admin") return t("role.superAdminDescription");
+  if (role === "workspace_manager") return t("role.workspaceManagerDescription");
+  if (role === "account_manager") return t("role.accountManagerDescription");
+  return t("role.unknownDescription");
 }
 
 export const inputClass =
@@ -70,32 +104,14 @@ export function dispatchTone(status: string): Tone {
   return "neutral";
 }
 
-export function dispatchLabel(status: string) {
-  const labels: Record<string, string> = {
-    sent: "Sent",
-    manual: "Manual",
-    simulated: "Simulated",
-    failed: "Failed",
-    skipped: "Skipped",
-    delivered: "Delivered",
-    bounced: "Bounced",
-    opened: "Opened",
-    clicked: "Clicked",
-    complained: "Complaint",
-    delivery_delayed: "Delayed",
-  };
-  return labels[status] ?? status;
+export function dispatchLabel(status: string, t: TranslateFn = identityT) {
+  const key = `dispatch.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
 }
 
-export function requestQuickFilterLabel(filter: RequestQuickFilter) {
-  const labels = {
-    attention: "Needs attention",
-    all: "All requests",
-    pending: "Pending requests",
-    approved_not_sent: "Approved without tickets sent",
-    email_failed: "Email failed",
-  };
-  return labels[filter];
+export function requestQuickFilterLabel(filter: RequestQuickFilter, t: TranslateFn = identityT) {
+  return t(`filter.${filter}`);
 }
 
 export function buildEmailDraftUrl(app: "default" | "outlook_web" | "gmail", recipients: string[], subject: string, body: string) {
