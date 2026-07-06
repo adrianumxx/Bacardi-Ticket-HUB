@@ -7,6 +7,7 @@ const envSchema = z.object({
   SUPER_ADMIN_EMAILS: z.string().min(1, "SUPER_ADMIN_EMAILS is required."),
   ADMIN_NOTIFY_EMAILS: z.string().optional().default(""),
   RESEND_API_KEY: z.string().optional().default(""),
+  RESEND_WEBHOOK_SECRET: z.string().optional().default(""),
   MAIL_FROM: z.string().optional().default("Bacardi Ticket Hub <tickets@example.com>"),
 });
 

@@ -111,7 +111,7 @@ type NotificationRecord = {
   type: string;
   recipients: string[];
   subject: string;
-  status: "sent" | "simulated" | "failed" | "skipped";
+  status: EmailDeliveryStatus;
   providerId?: string;
   error?: string;
 };
@@ -142,7 +142,7 @@ type AppNotification = {
   message: string;
   read: boolean;
   priority: "low" | "normal" | "high";
-  emailStatus: "sent" | "simulated" | "failed" | "skipped";
+  emailStatus: EmailDeliveryStatus;
   emailError?: string;
   createdAt: string;
 };
@@ -175,6 +175,8 @@ type MailHealthStatus = {
   from: string;
   hasApiKey: boolean;
 };
+
+type EmailDeliveryStatus = "sent" | "simulated" | "failed" | "skipped" | "delivered" | "bounced" | "opened" | "clicked" | "complained" | "delivery_delayed";
 
 type ManagerStat = {
   email: string;
@@ -228,7 +230,7 @@ function requestTicketTotal(request: TicketRequest) {
 }
 
 function requestHasFailedDispatch(request: TicketRequest) {
-  return request.dispatches.some((dispatch) => dispatch.status === "failed");
+  return request.dispatches.some((dispatch) => ["failed", "bounced", "complained"].includes(dispatch.status));
 }
 
 function requestApprovedWithoutDispatch(request: TicketRequest) {
@@ -236,9 +238,9 @@ function requestApprovedWithoutDispatch(request: TicketRequest) {
 }
 
 function dispatchTone(status: string): Tone {
-  if (status === "sent") return "good";
-  if (status === "failed") return "bad";
-  if (status === "skipped") return "warn";
+  if (status === "sent" || status === "delivered" || status === "opened" || status === "clicked") return "good";
+  if (status === "failed" || status === "bounced" || status === "complained") return "bad";
+  if (status === "skipped" || status === "delivery_delayed") return "warn";
   return "neutral";
 }
 
@@ -248,6 +250,12 @@ function dispatchLabel(status: string) {
     simulated: "Simulated",
     failed: "Failed",
     skipped: "Skipped",
+    delivered: "Delivered",
+    bounced: "Bounced",
+    opened: "Opened",
+    clicked: "Clicked",
+    complained: "Complaint",
+    delivery_delayed: "Delayed",
   };
   return labels[status] ?? status;
 }
@@ -1336,7 +1344,7 @@ function NotificationDrawer({
   const selectedSet = new Set(selectedIds);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id));
   const unreadVisible = notifications.filter((notification) => !notification.read).length;
-  const failedEmails = notifications.filter((notification) => notification.emailStatus === "failed").length;
+  const failedEmails = notifications.filter((notification) => ["failed", "bounced", "complained"].includes(notification.emailStatus)).length;
 
   function toggleSelected(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -1462,7 +1470,7 @@ function NotificationDrawer({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={notification.read ? "neutral" : "warn"}>{notification.read ? "Read" : "Unread"}</Badge>
                     {notification.priority === "high" && <Badge tone="bad">High priority</Badge>}
-                    <Badge tone={notification.emailStatus === "failed" ? "bad" : notification.emailStatus === "sent" ? "good" : "neutral"}>{notification.emailStatus === "skipped" ? "In-app only" : `Email ${notification.emailStatus}`}</Badge>
+                    <Badge tone={dispatchTone(notification.emailStatus)}>{notification.emailStatus === "skipped" ? "In-app only" : `Email ${dispatchLabel(notification.emailStatus)}`}</Badge>
                   </div>
                   <h3 className="mt-2 font-semibold">{notification.title}</h3>
                   <p className="mt-1 whitespace-pre-line text-sm leading-6 text-stone-600">{notification.message}</p>

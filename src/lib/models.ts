@@ -4,6 +4,7 @@ const roles = ["super_admin", "workspace_manager", "account_manager"] as const;
 const requestStatuses = ["pending", "approved", "partially_approved", "rejected"] as const;
 const accountRequestStatuses = ["pending", "approved", "rejected"] as const;
 const notificationCategories = ["accounts", "requests", "tickets", "users", "outlets", "events", "reports", "system"] as const;
+const deliveryStatuses = ["sent", "simulated", "failed", "skipped", "delivered", "bounced", "opened", "clicked", "complained", "delivery_delayed"] as const;
 
 const ProfileSchema = new Schema(
   {
@@ -32,7 +33,7 @@ const NotificationSchema = new Schema(
     type: { type: String, required: true },
     recipients: { type: [String], default: [] },
     subject: { type: String, default: "" },
-    status: { type: String, enum: ["sent", "simulated", "failed", "skipped"], default: "skipped" },
+    status: { type: String, enum: deliveryStatuses, default: "skipped" },
     providerId: { type: String, default: "" },
     error: { type: String, default: "" },
   },
@@ -117,7 +118,7 @@ const HistorySchema = new Schema(
 const DispatchDeliverySchema = new Schema(
   {
     recipient: { type: String, required: true },
-    status: { type: String, enum: ["sent", "simulated", "failed", "skipped"], default: "skipped" },
+    status: { type: String, enum: deliveryStatuses, default: "skipped" },
     providerId: { type: String, default: "" },
     error: { type: String, default: "" },
   },
@@ -195,7 +196,7 @@ const AppNotificationSchema = new Schema(
     read: { type: Boolean, default: false, index: true },
     priority: { type: String, enum: ["low", "normal", "high"], default: "normal" },
     metadata: { type: Schema.Types.Mixed },
-    emailStatus: { type: String, enum: ["sent", "simulated", "failed", "skipped"], default: "skipped" },
+    emailStatus: { type: String, enum: deliveryStatuses, default: "skipped" },
     emailProviderId: { type: String, default: "" },
     emailError: { type: String, default: "" },
   },

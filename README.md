@@ -34,7 +34,7 @@ Operational dashboard for Bacardi-sponsored events and festivals. Managers creat
 1. Copy `.env.example` to `.env.local`.
 2. Create a free MongoDB Atlas cluster and set `MONGODB_URI`.
 3. Set `SUPER_ADMIN_EMAILS` to your admin email address.
-4. Add `RESEND_API_KEY` and `MAIL_FROM` to send real emails. Without a key, internal notifications still work and email delivery is simulated.
+4. Add `RESEND_API_KEY`, `MAIL_FROM`, and `RESEND_WEBHOOK_SECRET` to send and track real emails. Without a key, internal notifications still work and email delivery is simulated.
 
 ```bash
 npm install
@@ -68,6 +68,7 @@ All commands should complete without errors. `test:e2e` uses `QA`-prefixed tempo
 
 - Use a long random `NEXTAUTH_SECRET`.
 - Verify `MAIL_FROM` in Resend before setting `RESEND_API_KEY`.
+- Add a Resend webhook pointing to `/api/mail/webhook` and copy its signing secret into `RESEND_WEBHOOK_SECRET`.
 - Keep `SUPER_ADMIN_EMAILS` to at least one active manager.
 - Confirm MongoDB Atlas backups are enabled.
 - Run `npm run check` before deployment.

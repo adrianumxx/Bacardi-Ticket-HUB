@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import { Resend, type WebhookEventPayload } from "resend";
 
 type Attachment = {
   filename: string;
@@ -139,6 +139,27 @@ export async function deliverMail(input: SendMailInput): Promise<MailDelivery> {
     console.error("[mail:failed]", { to: recipients, subject: input.subject, error: message });
     return { status: "failed", providerId: "", error: message, issue: classifyMailError(message) };
   }
+}
+
+export function verifyResendWebhook(payload: string, headers: Headers): WebhookEventPayload {
+  const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_WEBHOOK_SECRET is not configured.");
+    }
+    return JSON.parse(payload) as WebhookEventPayload;
+  }
+
+  const verifier = resend ?? new Resend(process.env.RESEND_API_KEY || "re_webhook_verifier");
+  return verifier.webhooks.verify({
+    payload,
+    headers: {
+      id: headers.get("svix-id") || "",
+      timestamp: headers.get("svix-timestamp") || "",
+      signature: headers.get("svix-signature") || "",
+    },
+    webhookSecret,
+  });
 }
 
 export function adminNotifyEmails() {
