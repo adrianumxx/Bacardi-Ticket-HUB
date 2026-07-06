@@ -44,6 +44,22 @@ import { formatDate, formatShortDate, splitEmails } from "@/lib/utils";
 type Role = "super_admin" | "account_manager";
 type Tone = "neutral" | "good" | "warn" | "bad";
 
+function isWorkspaceManager(role?: Role) {
+  return role === "super_admin";
+}
+
+function roleLabel(role?: Role) {
+  if (role === "super_admin") return "Workspace manager";
+  if (role === "account_manager") return "Account manager";
+  return "Unknown role";
+}
+
+function roleDescription(role?: Role) {
+  if (role === "super_admin") return "Can manage the workspace, users, approvals, reports, email status, and audit visibility.";
+  if (role === "account_manager") return "Can create ticket requests and follow their approval and dispatch status.";
+  return "Role permissions are not available.";
+}
+
 type EventItem = {
   _id: string;
   name: string;
@@ -834,7 +850,7 @@ export function Dashboard() {
       setEvents(eventData.events);
       setOutlets(outletData.outlets);
       setRequests(requestData.requests);
-      if (role === "super_admin") {
+      if (isWorkspaceManager(role)) {
         const [userData, mailData] = await Promise.all([
           api<typeof users>("/api/admin/users"),
           api<{ mail: MailHealthStatus; lastError?: string; lastErrorAt?: string }>("/api/mail/status"),
@@ -896,7 +912,7 @@ export function Dashboard() {
     () =>
       !role
         ? []
-        : role === "super_admin"
+        : isWorkspaceManager(role)
         ? [
             ["today", "Today", BarChart3],
             ["requests", "Requests", Ticket],
@@ -946,7 +962,7 @@ export function Dashboard() {
           group: "Requests",
           title: `${request.event?.name || "Request"} · ${request.outlet?.name || "Outlet"}`,
           detail: `${renderRequestStatus(request.status)} · ${request.accountManagerName || request.requestedBy} · ${requestTicketTotal(request)} ticket(s)`,
-          tab: role === "super_admin" ? "requests" : "mine",
+          tab: isWorkspaceManager(role) ? "requests" : "mine",
           quickFilter: request.status === "pending" ? "pending" : requestHasFailedDispatch(request) ? "email_failed" : requestApprovedWithoutDispatch(request) ? "approved_not_sent" : "all",
         });
       }
@@ -959,7 +975,7 @@ export function Dashboard() {
           group: "Events",
           title: event.name,
           detail: `${event.eventKind === "festival" ? "Festival" : "Event"} · ${renderEventStatus(event.status)}${event.city ? ` · ${event.city}` : ""}`,
-          tab: role === "super_admin" ? "events" : "new-request",
+          tab: isWorkspaceManager(role) ? "events" : "new-request",
         });
       }
     }
@@ -971,7 +987,7 @@ export function Dashboard() {
           group: "Outlets",
           title: outlet.name,
           detail: `${outlet.type}${outlet.city ? ` · ${outlet.city}` : ""} · ${outlet.status}`,
-          tab: role === "super_admin" ? "events" : "new-request",
+          tab: isWorkspaceManager(role) ? "events" : "new-request",
         });
       }
     }
@@ -994,7 +1010,7 @@ export function Dashboard() {
           id: `user-${user.email}-${user.role}`,
           group: "Users",
           title: user.name || user.email,
-          detail: `${user.email} · ${user.role === "super_admin" ? "Manager" : "Account manager"}`,
+          detail: `${user.email} · ${roleLabel(user.role)}`,
           tab: "users",
         });
       }
@@ -1006,7 +1022,7 @@ export function Dashboard() {
           id: `allowed-${user.email}-${user.role}`,
           group: "Users",
           title: user.email,
-          detail: `${user.role === "super_admin" ? "Manager" : "Account manager"} · approved access`,
+          detail: `${roleLabel(user.role)} · approved access`,
           tab: "users",
         });
       }
@@ -1019,7 +1035,7 @@ export function Dashboard() {
           group: "Notifications",
           title: notification.title,
           detail: `${notification.category} · ${notification.emailStatus} · ${formatShortDate(notification.createdAt)}`,
-          tab: notification.category === "accounts" || notification.category === "users" ? "users" : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : role === "super_admin" ? "requests" : "mine",
+          tab: notification.category === "accounts" || notification.category === "users" ? "users" : notification.category === "events" || notification.category === "outlets" ? "events" : notification.category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine",
         });
       }
     }
@@ -1095,7 +1111,7 @@ export function Dashboard() {
               {sidebarCollapsed ? <PanelLeftOpen size={22} /> : <PanelLeftClose size={22} />}
             </ActionButton>
             <div className="glass-pill hidden items-center gap-2 rounded-full border border-stone-200/70 bg-white/70 px-3 py-2 sm:flex">
-              <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
+              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
               <span className="max-w-[220px] truncate text-sm text-stone-600">{session?.user?.email}</span>
             </div>
             <ActionButton type="button" variant="secondary" className="h-9 w-9 min-h-0 px-0" onClick={() => void refresh()} title="Refresh">
@@ -1131,7 +1147,7 @@ export function Dashboard() {
           onFilter={setNotificationFilter}
           onClose={() => setNotificationsOpen(false)}
           onOpenEntity={(category) => {
-            const target = category === "accounts" || category === "users" ? "users" : category === "events" || category === "outlets" ? "events" : category === "reports" ? "reports" : role === "super_admin" ? "requests" : "mine";
+            const target = category === "accounts" || category === "users" ? "users" : category === "events" || category === "outlets" ? "events" : category === "reports" ? "reports" : isWorkspaceManager(role) ? "requests" : "mine";
             openTab(target);
             setNotificationsOpen(false);
           }}
@@ -1197,7 +1213,7 @@ export function Dashboard() {
 
             <div className={`border-t border-stone-200 p-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
               <div className="glass-pill rounded-md bg-stone-50/70 p-3">
-                <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
+                <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
                 <p className="mt-2 truncate text-xs text-stone-500">{session?.user?.email}</p>
               </div>
             </div>
@@ -1216,8 +1232,8 @@ export function Dashboard() {
               <h2 className="mt-1 text-2xl font-semibold">{activeLabel}</h2>
             </div>
             <p className="max-w-2xl text-sm leading-6 text-stone-600">
-              {role === "super_admin"
-                ? "Manage requests, outlets, events, users, and reporting from one operational view."
+              {isWorkspaceManager(role)
+                ? "Run the workspace cockpit: requests, events, users, reporting, email status, and audit visibility."
                 : "Create ticket requests and track approvals from one place."}
             </p>
           </div>
@@ -1231,7 +1247,7 @@ export function Dashboard() {
             </div>
           )}
 
-          {currentTab === "today" && role === "super_admin" && (
+          {currentTab === "today" && isWorkspaceManager(role) && (
             <ManagerTodayPanel
               requests={requests}
               users={users}
@@ -1882,7 +1898,7 @@ function UsersPanel({
     .sort((a, b) => a.email.localeCompare(b.email));
   const userStats = {
     total: combinedRows.length,
-    managers: combinedRows.filter((row) => row.role === "super_admin").length,
+    managers: combinedRows.filter((row) => isWorkspaceManager(row.role)).length,
     accountManagers: combinedRows.filter((row) => row.role === "account_manager").length,
     blocked: combinedRows.filter((row) => row.status === "blocked").length,
     missingAccess: combinedRows.filter((row) => !row.accessEnabled).length,
@@ -1898,15 +1914,16 @@ function UsersPanel({
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Access control</p>
           <h2 className="text-lg font-semibold">Create account access</h2>
-          <p className="mt-1 text-sm text-stone-600">Create an approved account directly, or review requests from the queue.</p>
+          <p className="mt-1 text-sm text-stone-600">Create approved access and assign the right operational role.</p>
         </div>
         <Field label="Email"><input name="email" type="email" required className={inputClass} /></Field>
         <Field label="Role">
           <select name="role" className={inputClass}>
-            <option value="account_manager">Account manager</option>
-            <option value="super_admin">Manager</option>
+            <option value="account_manager">{roleLabel("account_manager")}</option>
+            <option value="super_admin">{roleLabel("super_admin")}</option>
           </select>
         </Field>
+        <RoleModelNotice />
         {formError && <Notice message={formError} tone="bad" />}
         <ActionButton disabled={submitting}>{submitting ? "Saving access..." : "Enable access"}</ActionButton>
       </form>
@@ -1925,7 +1942,7 @@ function UsersPanel({
         <UserTable
           title="Users and access"
           rows={visibleRows}
-          managers={combinedRows.filter((row) => row.role === "super_admin")}
+          managers={combinedRows.filter((row) => isWorkspaceManager(row.role))}
           busyEmail={busyEmail}
           searchActive={Boolean(userSearch)}
           onUpdate={updateUser}
@@ -2039,12 +2056,23 @@ function UserAccessOverview({ stats }: { stats: { total: number; managers: numbe
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
       <CompactMetric label="Users" value={stats.total} />
-      <CompactMetric label="Managers" value={stats.managers} />
+      <CompactMetric label="Workspace managers" value={stats.managers} />
       <CompactMetric label="Account managers" value={stats.accountManagers} />
       <CompactMetric label="Unassigned" value={stats.unassigned} tone={stats.unassigned > 0 ? "warn" : "neutral"} />
       <CompactMetric label="Blocked" value={stats.blocked} tone={stats.blocked > 0 ? "bad" : "neutral"} />
       <CompactMetric label="Missing access" value={stats.missingAccess} tone={stats.missingAccess > 0 ? "warn" : "neutral"} />
     </section>
+  );
+}
+
+function RoleModelNotice() {
+  return (
+    <div className="rounded-md border border-[#ECDFC8] bg-[#FFFCF6] p-3 text-sm text-stone-700">
+      <p className="font-semibold text-stone-950">Role model v2 ready</p>
+      <p className="mt-1 leading-6">
+        Workspace managers currently see the full workspace. A future Super admin layer can sit above this for critical configuration and governance.
+      </p>
+    </div>
   );
 }
 
@@ -2292,8 +2320,8 @@ function UserTable({
                   disabled={isBusy}
                   onChange={(value) => void onUpdate(user.email, { role: value as Role, accessEnabled: true })}
                   options={[
-                    { value: "account_manager", label: "Account manager" },
-                    { value: "super_admin", label: "Manager" },
+                    { value: "account_manager", label: roleLabel("account_manager") },
+                    { value: "super_admin", label: roleLabel("super_admin") },
                   ]}
                 />
               </LabeledControl>
@@ -2306,7 +2334,7 @@ function UserTable({
                     options={[{ value: "", label: "Unassigned" }, ...managers.map((manager) => ({ value: manager.email, label: manager.name || manager.email }))]}
                   />
                 ) : (
-                  <p className="text-sm text-stone-500">Owns team</p>
+                  <p className="text-sm text-stone-500">Workspace access</p>
                 )}
                 {user.managerEmail && <p className="mt-1 truncate text-[11px] text-stone-400">{manager?.email || user.managerEmail}</p>}
               </LabeledControl>
@@ -3483,8 +3511,9 @@ function SettingsPanel({ notify, onDone }: { notify: (message: string, tone?: To
             <input className={inputClass} value={session?.user?.email || ""} disabled />
           </Field>
           <Field label="Role" hint="Roles are managed by a manager in the Users section.">
-            <div>
-              <Badge tone={role === "super_admin" ? "good" : "neutral"}>{role === "super_admin" ? "Manager" : "Account manager"}</Badge>
+            <div className="grid gap-2">
+              <Badge tone={isWorkspaceManager(role) ? "good" : "neutral"}>{roleLabel(role)}</Badge>
+              <p className="text-sm leading-6 text-stone-600">{roleDescription(role)}</p>
             </div>
           </Field>
           <div>
