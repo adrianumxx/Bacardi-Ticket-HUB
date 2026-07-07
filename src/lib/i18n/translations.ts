@@ -853,7 +853,7 @@ export const translations: Record<Language, Dict> = {
     "notifications.clearVisible": "Désélectionner",
     "notifications.selectAllVisible": "Tout sélectionner",
     "notifications.markAllRead": "Tout marquer comme lu",
-    "notifications.selectedCount": "{{count}} sélectionnée{{plural}}",
+    "notifications.selectedCount": "{{count}} sélectionnée(s)",
     "notifications.markRead": "Marquer comme lu",
     "notifications.markUnread": "Marquer comme non lu",
     "notifications.delete": "Supprimer",
