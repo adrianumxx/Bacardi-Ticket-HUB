@@ -178,10 +178,12 @@ export function EventsPanel({
     }
   }
 
-  async function updateEvent(id: string, form: HTMLFormElement) {
+  async function updateEvent(event: EventItem, form: HTMLFormElement) {
+    const id = event._id;
     const data = new FormData(form);
     setEventActionId(id);
     try {
+      const previousActiveByName = new Map(event.ticketTypes.map((type) => [type.name, type.active]));
       await api(`/api/events/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -191,8 +193,9 @@ export function EventsPanel({
           maxTicketsPerOutlet: data.get("maxTicketsPerOutlet"),
           ticketTypes: String(data.get("ticketTypes") || "")
             .split(",")
-            .map((name) => ({ name: name.trim(), active: true }))
-            .filter((type) => type.name),
+            .map((name) => name.trim())
+            .filter(Boolean)
+            .map((name) => ({ name, active: previousActiveByName.get(name) ?? true })),
         }),
       });
       notify(t("events.updatedNotice"));
@@ -338,7 +341,7 @@ export function EventsPanel({
               className="mt-4 grid gap-3"
               onSubmit={(submitEvent) => {
                 submitEvent.preventDefault();
-                void updateEvent(event._id, submitEvent.currentTarget);
+                void updateEvent(event, submitEvent.currentTarget);
               }}
             >
               <div className="grid gap-3 md:grid-cols-2">

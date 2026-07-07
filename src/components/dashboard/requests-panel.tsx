@@ -376,7 +376,9 @@ export function AdminRequests({
         {quickFilter === "attention" && <span className="text-xs uppercase tracking-[0.12em] text-[#EB6A1C]">{t("requests.operationalQueue")}</span>}
       </div>
 
-      {visibleRequests.map((request) => <RequestCard key={request._id} request={request} onDone={onDone} notify={notify} />)}
+      {visibleRequests.map((request) => (
+        <RequestCard key={`${request._id}-${request.status}-${request.history.length}`} request={request} onDone={onDone} notify={notify} />
+      ))}
       {hiddenCount > 0 && (
         <div className="flex justify-center">
           <ActionButton type="button" variant="secondary" onClick={() => setVisibleState({ key: filterKey, count: visibleCount + INITIAL_VISIBLE_REQUESTS })}>
