@@ -137,6 +137,15 @@ export type DispatchRetrySeed = {
   token: number;
 };
 
+export type RequestDuplicateSeed = {
+  eventId: string;
+  outletName: string;
+  ticketType: string;
+  recipientEmails: string;
+  notes: string;
+  token: number;
+};
+
 export type ReportRow = Record<string, string | number>;
 
 export type ManagerSummary = {

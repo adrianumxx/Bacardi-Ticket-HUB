@@ -2,21 +2,9 @@ import { errorResponse, json } from "@/lib/api";
 import { requireWorkspaceManager, visibleAccountManagerEmails } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
-import { renderRequestStatus } from "@/lib/labels";
 import { auditLog } from "@/lib/audit";
 import { endOfDay } from "@/lib/utils";
-
-type ReportLine = {
-  _id: unknown;
-  createdAt?: string | Date;
-  event?: { name?: string; eventKind?: string; sponsorshipName?: string; sponsorshipTier?: string; market?: string };
-  outlet?: { name?: string; city?: string; type?: string };
-  requestedBy: string;
-  accountManagerName?: string;
-  status: string;
-  items: { ticketType: string; quantity: number; approvedQuantity?: number }[];
-  dispatches: unknown[];
-};
+import { buildKpis, buildReportRows, type ReportLine } from "@/lib/reports";
 
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
@@ -67,31 +55,7 @@ export async function GET(request: Request) {
       .lean();
 
     const rawRows = requests as ReportLine[];
-    const rows = rawRows.map((item) => {
-      const event = item.event;
-      const outlet = item.outlet;
-      const quantity = item.items.reduce((sum, line) => sum + line.quantity, 0);
-      const approved = item.items.reduce((sum, line) => sum + (line.approvedQuantity || 0), 0);
-      return {
-        id: String(item._id),
-        createdAt: item.createdAt,
-        event: event?.name || "",
-        eventKind: event?.eventKind === "festival" ? "Festival" : "Event",
-        sponsorshipName: event?.sponsorshipName || "",
-        sponsorshipTier: event?.sponsorshipTier || "",
-        market: event?.market || "",
-        outlet: outlet?.name || "",
-        outletCity: outlet?.city || "",
-        outletType: outlet?.type || "",
-        accountManager: item.accountManagerName || item.requestedBy,
-        accountManagerEmail: item.requestedBy,
-        status: renderRequestStatus(item.status),
-        quantity,
-        approved,
-        ticketTypes: item.items.map((line) => `${line.ticketType} x${line.quantity}`).join(", "),
-        dispatches: item.dispatches.length,
-      };
-    });
+    const rows = buildReportRows(rawRows);
 
     if (format === "csv") {
       const columns = [
@@ -130,14 +94,7 @@ export async function GET(request: Request) {
       await auditLog({ actor: user.email, action: "report.export_pdf", target: "ticket_requests", payload: { filters: Object.fromEntries(searchParams), rows: rows.length } });
     }
 
-    const kpis = {
-      total: rows.length,
-      pending: rawRows.filter((row) => row.status === "pending").length,
-      approved: rawRows.filter((row) => row.status === "approved" || row.status === "partially_approved").length,
-      rejected: rawRows.filter((row) => row.status === "rejected").length,
-      dispatched: rows.reduce((sum, row) => sum + row.dispatches, 0),
-      requestedTickets: rows.reduce((sum, row) => sum + row.quantity, 0),
-    };
+    const kpis = buildKpis(rawRows, rows);
     await auditLog({ actor: user.email, action: "report.viewed", target: "ticket_requests", payload: { filters: Object.fromEntries(searchParams), rows: rows.length } });
 
     return json({ rows, kpis });

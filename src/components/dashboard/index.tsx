@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/solar-icons";
 import { renderEventStatus, renderRequestStatus } from "@/lib/labels";
 import { formatShortDate } from "@/lib/utils";
-import type { AccountRequest, AppNotification, EventItem, GlobalSearchResult, Outlet, RequestQuickFilter, Role, TicketRequest, Tone } from "./types";
+import type { AccountRequest, AppNotification, EventItem, GlobalSearchResult, Outlet, RequestDuplicateSeed, RequestQuickFilter, Role, TicketRequest, Tone } from "./types";
 import { api, isSuperAdmin, isWorkspaceManager, requestApprovedWithoutDispatch, requestHasFailedDispatch, requestTicketTotal, roleLabel } from "./helpers";
 import { ActionButton, Badge, Kpi, Notice } from "./ui-primitives";
 import { NotificationDrawer } from "./notifications";
@@ -35,6 +35,7 @@ import { UsersPanel } from "./users-panel";
 import { AuditPanel } from "./audit-panel";
 import { AdminRequests, MinePanel, NewRequestPanel } from "./requests-panel";
 import { ReportsPanel } from "./reports-panel";
+import { MyReportsPanel } from "./my-reports-panel";
 import { SettingsPanel } from "./settings-panel";
 import { useTranslation } from "@/lib/i18n/LanguageProvider";
 import { LanguageSwitcher } from "@/lib/i18n/LanguageSwitcher";
@@ -55,6 +56,7 @@ export function Dashboard() {
     profiles: { email: string; name?: string; role: Role; status?: "active" | "blocked"; lastLoginAt?: string; managerEmail?: string }[];
     accountRequests: AccountRequest[];
   }>({ allowedUsers: [], profiles: [], accountRequests: [] });
+  const [duplicateSeed, setDuplicateSeed] = useState<RequestDuplicateSeed | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -165,6 +167,7 @@ export function Dashboard() {
         : [
             ["new-request", t("nav.newRequest"), Plus],
             ["mine", t("nav.mine"), Ticket],
+            ["my-reports", t("nav.myReports"), BarChart3],
             ["settings", t("nav.settings"), Settings],
           ],
     [role, t],
@@ -529,8 +532,35 @@ export function Dashboard() {
           {currentTab === "users" && <UsersPanel users={users} onDone={refresh} notify={showNotice} />}
           {currentTab === "reports" && <ReportsPanel />}
           {currentTab === "audit" && isSuperAdmin(role) && <AuditPanel />}
-          {currentTab === "new-request" && <NewRequestPanel events={events} outlets={outlets} onDone={refresh} notify={showNotice} />}
-          {currentTab === "mine" && <MinePanel requests={requests} onDone={refresh} notify={showNotice} />}
+          {currentTab === "new-request" && (
+            <NewRequestPanel
+              events={events}
+              outlets={outlets}
+              onDone={refresh}
+              notify={showNotice}
+              duplicateSeed={duplicateSeed}
+              onDuplicateSeedConsumed={() => setDuplicateSeed(null)}
+            />
+          )}
+          {currentTab === "mine" && (
+            <MinePanel
+              requests={requests}
+              onDone={refresh}
+              notify={showNotice}
+              onDuplicate={(request) => {
+                setDuplicateSeed({
+                  eventId: request.event?._id ?? "",
+                  outletName: request.outlet?.name ?? "",
+                  ticketType: request.items[0]?.ticketType ?? "",
+                  recipientEmails: (request.recipientEmails ?? []).join(", "),
+                  notes: request.notes ?? "",
+                  token: Date.now(),
+                });
+                openTab("new-request");
+              }}
+            />
+          )}
+          {currentTab === "my-reports" && <MyReportsPanel />}
           {currentTab === "settings" && <SettingsPanel notify={showNotice} onDone={refresh} />}
         </section>
       </div>
