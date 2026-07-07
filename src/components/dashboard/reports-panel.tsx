@@ -192,7 +192,7 @@ export function ManagerDrilldownPanel({
 
   return (
     <div className="fixed inset-0 z-[75]">
-      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("reports.closeReport")} />
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("reports.closeManagerReport")} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col border-l border-stone-200 bg-[#FFFCF6] shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 bg-white p-4">
           <div className="min-w-0">

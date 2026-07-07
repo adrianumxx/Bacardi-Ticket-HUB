@@ -82,7 +82,7 @@ export function NotificationDrawer({
 
   return (
     <div className="fixed inset-0 z-[70]">
-      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("notifications.close")} />
+      <button className="absolute inset-0 bg-stone-950/35" onClick={onClose} aria-label={t("notifications.closeOverlay")} />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-stone-200 bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-stone-200 p-4">
           <div>
