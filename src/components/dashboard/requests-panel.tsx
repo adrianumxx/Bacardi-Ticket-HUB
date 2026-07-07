@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { CheckCircle2, ChevronDown, Mail, Plus, RefreshCcw, X, XCircle } from "@/components/ui/solar-icons";
 import { renderHistoryAction, renderHistoryMessage, renderRequestStatus, type RequestStatus } from "@/lib/labels";
 import { formatDate, formatShortDate, splitEmails } from "@/lib/utils";
-import type { DispatchRetrySeed, EventItem, ManagerStat, Outlet, RequestQuickFilter, TicketRequest, Tone } from "./types";
+import type { DispatchRetrySeed, EventItem, ManagerStat, Outlet, RequestDuplicateSeed, RequestQuickFilter, TicketRequest, Tone } from "./types";
 import {
   api,
   buildEmailDraftUrl,
@@ -25,8 +25,22 @@ import { localeMap } from "@/lib/i18n/translations";
 
 const INITIAL_VISIBLE_REQUESTS = 8;
 
-export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[]; outlets: Outlet[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+export function NewRequestPanel({
+  events,
+  onDone,
+  notify,
+  duplicateSeed,
+  onDuplicateSeedConsumed,
+}: {
+  events: EventItem[];
+  outlets: Outlet[];
+  onDone: () => Promise<void>;
+  notify: (message: string, tone?: Tone) => void;
+  duplicateSeed?: RequestDuplicateSeed | null;
+  onDuplicateSeedConsumed?: () => void;
+}) {
   const { t } = useTranslation();
+  const seedToken = duplicateSeed?.token ?? 0;
   const published = events.filter((event) => event.status === "published");
   const [eventId, setEventId] = useState("");
   const outletIdCounter = useRef(1);
@@ -34,6 +48,7 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [submittedMessage, setSubmittedMessage] = useState("");
+  const [quotaByOutlet, setQuotaByOutlet] = useState<Record<string, { max: number; used: number; remaining: number }>>({});
   const effectiveEventId = eventId || published[0]?._id || "";
   const selectedEvent = published.find((event) => event._id === effectiveEventId);
   const ticketTypes = selectedEvent?.ticketTypes.filter((type) => type.active) ?? [];
@@ -67,6 +82,34 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
   function removeOutletName(id: string) {
     setOutletRows((current) => (current.length === 1 ? current : current.filter((outlet) => outlet.id !== id)));
   }
+
+  useEffect(() => {
+    if (!duplicateSeed) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time prefill triggered by an external "Duplicate" action, not derivable during render
+    setEventId(duplicateSeed.eventId);
+    outletIdCounter.current = 1;
+    setOutletRows([{ id: "outlet-1", name: duplicateSeed.outletName, quantity: 1 }]);
+    onDuplicateSeedConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when a new duplicate is requested (token changes)
+  }, [duplicateSeed?.token]);
+
+  useEffect(() => {
+    if (!effectiveEventId) return;
+    const rowsWithNames = outletRows.filter((outlet) => outlet.name.trim());
+    if (rowsWithNames.length === 0) return;
+    const timeout = setTimeout(() => {
+      rowsWithNames.forEach(async (outlet) => {
+        try {
+          const params = new URLSearchParams({ eventId: effectiveEventId, outletName: outlet.name.trim() });
+          const result = await api<{ max: number; used: number; remaining: number }>(`/api/requests/quota?${params.toString()}`);
+          setQuotaByOutlet((current) => ({ ...current, [outlet.id]: result }));
+        } catch {
+          // Quota preview is best-effort; submission still validates server-side.
+        }
+      });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [effectiveEventId, outletRows]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -139,6 +182,11 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
                   className={inputClass}
                   required={index === 0}
                 />
+                {quotaByOutlet[outlet.id] && (
+                  <p className="mt-1 text-xs text-stone-500">
+                    {t("requests.remainingForOutlet", { remaining: quotaByOutlet[outlet.id].remaining, max: quotaByOutlet[outlet.id].max })}
+                  </p>
+                )}
               </Field>
               <Field label={t("requests.quantity")}>
                 <input
@@ -185,7 +233,7 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
       <Step title={t("requests.step3")}>
         <div className="grid gap-3">
           <Field label={t("requests.ticketType")}>
-            <select name="ticketType" className={inputClass} disabled={ticketTypes.length === 0}>
+            <select key={seedToken} name="ticketType" className={inputClass} disabled={ticketTypes.length === 0} defaultValue={duplicateSeed?.ticketType}>
               {ticketTypes.map((type) => <option key={type.name} value={type.name}>{type.name}</option>)}
             </select>
           </Field>
@@ -195,9 +243,9 @@ export function NewRequestPanel({ events, onDone, notify }: { events: EventItem[
       <Step title={t("requests.step4")}>
         <div className="grid gap-3">
           <Field label={t("requests.recipientEmails")} hint={t("requests.recipientEmailsHint")}>
-            <input name="recipientEmails" type="text" inputMode="email" required placeholder={t("requests.recipientEmailsPlaceholder")} className={inputClass} />
+            <input key={seedToken} name="recipientEmails" type="text" inputMode="email" required defaultValue={duplicateSeed?.recipientEmails} placeholder={t("requests.recipientEmailsPlaceholder")} className={inputClass} />
           </Field>
-          <Field label={t("requests.notes")}><textarea name="notes" className={inputClass} rows={4} /></Field>
+          <Field label={t("requests.notes")}><textarea key={seedToken} name="notes" className={inputClass} rows={4} defaultValue={duplicateSeed?.notes} /></Field>
         </div>
       </Step>
 
@@ -809,7 +857,17 @@ export function DispatchList({
 }
 
 
-export function MinePanel({ requests, onDone, notify }: { requests: TicketRequest[]; onDone: () => Promise<void>; notify: (message: string, tone?: Tone) => void }) {
+export function MinePanel({
+  requests,
+  onDone,
+  notify,
+  onDuplicate,
+}: {
+  requests: TicketRequest[];
+  onDone: () => Promise<void>;
+  notify: (message: string, tone?: Tone) => void;
+  onDuplicate?: (request: TicketRequest) => void;
+}) {
   const { t } = useTranslation();
   const nextStep = (request: TicketRequest) => {
     if (request.status === "pending") return t("requests.nextPending");
@@ -818,9 +876,70 @@ export function MinePanel({ requests, onDone, notify }: { requests: TicketReques
     return t("requests.rejectedReviewNote");
   };
 
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
+
+  const events = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const request of requests) {
+      if (request.event?._id && request.event.name) seen.set(request.event._id, request.event.name);
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [requests]);
+
+  const visibleRequests = useMemo(() => {
+    const from = dateFrom ? new Date(dateFrom) : null;
+    const to = dateTo ? new Date(dateTo) : null;
+    if (to) to.setHours(23, 59, 59, 999);
+    const filtered = requests.filter((request) => {
+      const matchesStatus = statusFilter === "all" || request.status === statusFilter;
+      const matchesEvent = eventFilter === "all" || request.event?._id === eventFilter;
+      const createdAt = new Date(request.createdAt);
+      const matchesFrom = !from || createdAt >= from;
+      const matchesTo = !to || createdAt <= to;
+      return matchesStatus && matchesEvent && matchesFrom && matchesTo;
+    });
+    return [...filtered].sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return sortBy === "newest" ? -diff : diff;
+    });
+  }, [requests, statusFilter, eventFilter, dateFrom, dateTo, sortBy]);
+
   return (
     <div className="space-y-4">
-      {requests.map((request) => (
+      <div className="grid gap-3 rounded-md border border-stone-250 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
+        <Field label={t("requests.status")}>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}>
+            <option value="all">{t("requests.allStatuses")}</option>
+            <option value="pending">{t("requests.pending")}</option>
+            <option value="approved">{t("requests.approvedStatus")}</option>
+            <option value="partially_approved">{t("requests.partiallyApproved")}</option>
+            <option value="rejected">{t("requests.rejectedStatus")}</option>
+          </select>
+        </Field>
+        <Field label={t("requests.eventOrFestival")}>
+          <select value={eventFilter} onChange={(event) => setEventFilter(event.target.value)} className={inputClass}>
+            <option value="all">{t("requests.allEventsFestivals")}</option>
+            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+          </select>
+        </Field>
+        <Field label={t("requests.dateFrom")}>
+          <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={inputClass} />
+        </Field>
+        <Field label={t("requests.dateTo")}>
+          <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={inputClass} />
+        </Field>
+        <Field label={t("requests.sortBy")}>
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "newest" | "oldest")} className={inputClass}>
+            <option value="newest">{t("requests.sortNewest")}</option>
+            <option value="oldest">{t("requests.sortOldest")}</option>
+          </select>
+        </Field>
+      </div>
+      {visibleRequests.map((request) => (
         <article key={request._id} className="rounded-md border border-stone-250 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -830,14 +949,27 @@ export function MinePanel({ requests, onDone, notify }: { requests: TicketReques
             <Badge tone={statusTone(request.status)}>{renderRequestStatus(request.status, t)}</Badge>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">{request.items.map((item) => <Badge key={item.ticketType}>{item.ticketType} x{item.quantity}</Badge>)}</div>
-          {request.adminNotes && <p className="mt-3 rounded-md bg-stone-100 p-3 text-sm">{request.adminNotes}</p>}
+          {request.status === "rejected" && request.adminNotes && (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+              <p className="font-semibold">{t("requests.rejectionNoteLabel")}</p>
+              <p className="mt-1">{request.adminNotes}</p>
+            </div>
+          )}
+          {request.status === "rejected" && onDuplicate && (
+            <ActionButton type="button" variant="secondary" className="mt-3" onClick={() => onDuplicate(request)}>
+              <RefreshCcw size={14} /> {t("requests.duplicate")}
+            </ActionButton>
+          )}
+          {request.status !== "rejected" && request.adminNotes && (
+            <p className="mt-3 rounded-md bg-stone-100 p-3 text-sm">{request.adminNotes}</p>
+          )}
           <p className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3 text-sm text-stone-700">{nextStep(request)}</p>
           <div className="mt-3">
             <SendTicketPanel request={request} onDone={onDone} notify={notify} />
           </div>
         </article>
       ))}
-      {requests.length === 0 && <EmptyState text={t("requests.noRequestsYet")} />}
+      {visibleRequests.length === 0 && <EmptyState text={t("requests.noRequestsYet")} />}
     </div>
   );
 }
