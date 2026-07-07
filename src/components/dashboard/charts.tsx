@@ -314,7 +314,7 @@ export function ManagerActivityMatrix({ rows, selectedManager, onSelectManager }
             <span>{t("reports.topOutlet")}</span>
             <span>{t("reports.topEvent")}</span>
             <span>{t("reports.latestMetric")}</span>
-            <span className="text-center">Report</span>
+            <span className="text-center">{t("reports.viewReport")}</span>
           </div>
           <div className="divide-y divide-stone-200">
             {managers.map((manager) => {

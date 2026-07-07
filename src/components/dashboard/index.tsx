@@ -200,8 +200,8 @@ export function Dashboard() {
         results.push({
           id: `request-${request._id}`,
           group: t("search.groupRequests"),
-          title: `${request.event?.name || "Request"} · ${request.outlet?.name || "Outlet"}`,
-          detail: `${renderRequestStatus(request.status, t)} · ${request.accountManagerName || request.requestedBy} · ${requestTicketTotal(request)} ticket(s)`,
+          title: `${request.event?.name || t("index.requestFallback")} · ${request.outlet?.name || t("index.outletFallback")}`,
+          detail: `${renderRequestStatus(request.status, t)} · ${request.accountManagerName || request.requestedBy} · ${t("index.ticketCount", { count: requestTicketTotal(request) })}`,
           tab: isWorkspaceManager(role) ? "requests" : "mine",
           quickFilter: request.status === "pending" ? "pending" : requestHasFailedDispatch(request) ? "email_failed" : requestApprovedWithoutDispatch(request) ? "approved_not_sent" : "all",
         });
@@ -214,7 +214,7 @@ export function Dashboard() {
           id: `event-${event._id}`,
           group: t("search.groupEvents"),
           title: event.name,
-          detail: `${event.eventKind === "festival" ? "Festival" : "Event"} - ${renderEventStatus(event.status, t)}${event.city ? ` - ${event.city}` : ""}`,
+          detail: `${event.eventKind === "festival" ? t("index.festival") : t("index.event")} - ${renderEventStatus(event.status, t)}${event.city ? ` - ${event.city}` : ""}`,
           tab: isWorkspaceManager(role) ? "events" : "new-request",
           eventId: event._id,
         });
@@ -302,8 +302,8 @@ export function Dashboard() {
       <main className="flex min-h-screen items-center justify-center bg-[#FFFCF6] px-6 text-stone-950">
         <div className="grid justify-items-center gap-4 text-center">
           <Image src="/brand-logo.png?v=2" alt="Bacardi logo" width={76} height={76} className="h-20 w-20 object-contain" priority unoptimized />
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#EB6A1C]">Bacardi Ticket Hub</p>
-          <p className="text-sm text-stone-600">Loading your workspace...</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#EB6A1C]">{t("login.title")}</p>
+          <p className="text-sm text-stone-600">{t("index.loadingWorkspace")}</p>
         </div>
       </main>
     );
@@ -471,15 +471,15 @@ export function Dashboard() {
         <section className="mx-auto min-w-0 w-full max-w-[1600px] flex-1 space-y-5 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">Workspace</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#EB6A1C]">{t("index.workspace")}</p>
               <h2 className="mt-1 text-2xl font-semibold">{activeLabel}</h2>
             </div>
             <p className="max-w-2xl text-sm leading-6 text-stone-600">
               {isWorkspaceManager(role)
                 ? isSuperAdmin(role)
-                  ? "Run the workspace cockpit: requests, events, users, reporting, notifications, and audit visibility."
-                  : "Run the workspace cockpit: requests, events, reporting, notifications, and ticket dispatch."
-                : "Create ticket requests and track approvals from one place."}
+                  ? t("index.cockpitSuperAdmin")
+                  : t("index.cockpitManager")
+                : t("index.cockpitAccountManager")}
             </p>
           </div>
           {showWorkspaceKpis && (
