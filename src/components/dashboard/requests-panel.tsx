@@ -657,7 +657,7 @@ export function RequestCard({ request, onDone, notify }: { request: TicketReques
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  void quickDecision("rejected");
+                  if (window.confirm(t("requests.rejectConfirm"))) void quickDecision("rejected");
                 }}
               >
                 <XCircle size={14} /> {quickAction === "rejected" ? t("requests.rejecting") : t("requests.reject")}
