@@ -46,11 +46,21 @@ export function quantityThatConsumesLimit(status: string, items: TicketLineInput
   return approvedQuantity(items);
 }
 
+export function ticketTypeUnavailableMessage(ticketType: string) {
+  return `Ticket type is not available: ${ticketType}.`;
+}
+
+export const STATUS_QUANTITY_MESSAGES = {
+  approvedMustMatchRequested: "Approved requests must approve the full requested quantity.",
+  partialApprovalRange: "Partially approved requests must approve at least one ticket but less than the requested quantity.",
+  rejectedMustHaveZeroApproved: "Rejected requests cannot have approved tickets.",
+} as const;
+
 export function validateTicketTypes(event: RuleEvent, items: TicketLineInput[]) {
   const activeTypes = activeTicketTypeSet(event);
   for (const item of items) {
     if (!activeTypes.has(item.ticketType)) {
-      return `Ticket type is not available: ${item.ticketType}.`;
+      return ticketTypeUnavailableMessage(item.ticketType);
     }
   }
   return "";
@@ -61,13 +71,13 @@ export function validateStatusQuantities(status: string, items: TicketLineInput[
   const approved = approvedQuantity(items);
 
   if (status === "approved" && approved !== requested) {
-    return "Approved requests must approve the full requested quantity.";
+    return STATUS_QUANTITY_MESSAGES.approvedMustMatchRequested;
   }
   if (status === "partially_approved" && (approved <= 0 || approved >= requested)) {
-    return "Partially approved requests must approve at least one ticket but less than the requested quantity.";
+    return STATUS_QUANTITY_MESSAGES.partialApprovalRange;
   }
   if (status === "rejected" && approved !== 0) {
-    return "Rejected requests cannot have approved tickets.";
+    return STATUS_QUANTITY_MESSAGES.rejectedMustHaveZeroApproved;
   }
   return "";
 }

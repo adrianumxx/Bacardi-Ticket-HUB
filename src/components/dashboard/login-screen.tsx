@@ -41,7 +41,7 @@ export function LoginScreen() {
     setError("");
     setSuccess("");
     try {
-      const response = await api<{ message: string }>("/api/account-requests", {
+      await api<{ message: string }>("/api/account-requests", {
         method: "POST",
         body: JSON.stringify({
           email: accessEmail,
@@ -50,7 +50,7 @@ export function LoginScreen() {
           reason: accessReason,
         }),
       });
-      setSuccess(response.message);
+      setSuccess(t("login.requestSent"));
       setEmail(accessEmail);
       setAccessSubmitted(true);
       setAccessName("");

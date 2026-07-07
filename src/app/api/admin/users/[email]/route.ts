@@ -20,7 +20,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     const email = normalizeEmail(decodeURIComponent(rawEmail));
     const input = adminUserUpdateSchema.parse(await request.json());
     const current = await Profile.findOne({ email });
-    if (!current) return notFound("User profile not found.");
+    if (!current) return notFound("User profile not found.", "USER_PROFILE_NOT_FOUND");
     const accessEnabled = input.accessEnabled ?? input.whitelisted;
     const previousRole = current.role;
 
@@ -41,17 +41,17 @@ export async function PATCH(request: Request, context: { params: Promise<{ email
     if (input.managerEmail) {
       const targetRole = input.role || current.role;
       if (targetRole !== "account_manager") {
-        return badRequest("Only account managers can be assigned to a manager's team.");
+        return badRequest("Only account managers can be assigned to a manager's team.", "ONLY_ACCOUNT_MANAGERS_ASSIGNABLE");
       }
       const managerEmail = normalizeEmail(input.managerEmail);
       if (managerEmail === email) {
-        return badRequest("An account manager cannot be their own manager.");
+        return badRequest("An account manager cannot be their own manager.", "CANNOT_BE_OWN_MANAGER");
       }
       const [manager, managerAccess] = await Promise.all([
         Profile.findOne({ email: managerEmail, role: { $in: ["super_admin", "workspace_manager"] }, status: "active" }),
         AllowedUser.findOne({ email: managerEmail }),
       ]);
-      if (!manager || !managerAccess) return badRequest("Select an active manager with approved access to assign this team member to.");
+      if (!manager || !managerAccess) return badRequest("Select an active manager with approved access to assign this team member to.", "INVALID_MANAGER_ASSIGNMENT");
     }
 
     if (input.role) current.role = input.role;
@@ -108,7 +108,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ emai
     const email = normalizeEmail(decodeURIComponent(rawEmail));
 
     if (email === actor.email) {
-      return badRequest("You cannot delete your own account.");
+      return badRequest("You cannot delete your own account.", "CANNOT_DELETE_SELF");
     }
 
     const current = await Profile.findOne({ email });

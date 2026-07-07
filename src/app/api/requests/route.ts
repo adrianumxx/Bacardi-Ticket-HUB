@@ -4,7 +4,7 @@ import { connectDb } from "@/lib/db";
 import { Event, Outlet, TicketRequest } from "@/lib/models";
 import { createRequestSchema } from "@/lib/schemas";
 import { adminNotifyEmails, emailHtml } from "@/lib/mail";
-import { requestedQuantity, usedTicketsForOutlet, validateTicketTypes } from "@/lib/request-rules";
+import { activeTicketTypeSet, requestedQuantity, usedTicketsForOutlet, validateTicketTypes } from "@/lib/request-rules";
 import { notifyAdmins, notifyUser } from "@/lib/notifications";
 import { auditLog } from "@/lib/audit";
 import { pluralize } from "@/lib/utils";
@@ -62,11 +62,15 @@ export async function POST(request: Request) {
     const input = createRequestSchema.parse(await request.json());
     const event = (await Event.findById(input.eventId).lean()) as LeanEvent | null;
     if (!event || event.status !== "published") {
-      return badRequest("This event or festival is not available for new requests.");
+      return badRequest("This event or festival is not available for new requests.", "EVENT_NOT_AVAILABLE");
     }
 
     const ticketTypeError = validateTicketTypes(event, input.items);
-    if (ticketTypeError) return badRequest(ticketTypeError);
+    if (ticketTypeError) {
+      const activeTypes = activeTicketTypeSet(event);
+      const badItem = input.items.find((item) => !activeTypes.has(item.ticketType));
+      return badRequest(ticketTypeError, "TICKET_TYPE_UNAVAILABLE", { ticketType: badItem?.ticketType ?? "" });
+    }
 
     const outletInputs =
       input.outlets?.length
@@ -75,14 +79,14 @@ export async function POST(request: Request) {
           ? [{ name: input.newOutlet.name, quantity: requestedQuantity(input.items) }]
           : [];
     const createdRequests: Array<{ _id: unknown }> = [];
-    async function rollbackAndBadRequest(message: string) {
+    async function rollbackAndBadRequest(message: string, code: string, params?: Record<string, string | number>) {
       if (createdRequests.length > 0) {
         await TicketRequest.deleteMany({ _id: { $in: createdRequests.map((requestDoc) => requestDoc._id) } });
       }
-      return badRequest(message);
+      return badRequest(message, code, params);
     }
 
-    if (!input.outletId && outletInputs.length === 0) return badRequest("Add at least one outlet.");
+    if (!input.outletId && outletInputs.length === 0) return badRequest("Add at least one outlet.", "ADD_AT_LEAST_ONE_OUTLET");
 
     for (const outletInput of outletInputs.length > 0 ? outletInputs : [{ name: "" }]) {
       let outletId = input.outletId;
@@ -96,6 +100,8 @@ export async function POST(request: Request) {
       if (requestedQty > event.maxTicketsPerOutlet) {
         return rollbackAndBadRequest(
           `This event or festival allows a maximum of ${pluralize(event.maxTicketsPerOutlet, "ticket")} per outlet.`,
+          "MAX_TICKETS_PER_OUTLET",
+          { max: event.maxTicketsPerOutlet },
         );
       }
 
@@ -115,15 +121,17 @@ export async function POST(request: Request) {
         outletId = String(outlet._id);
       }
 
-      if (!outletId) return rollbackAndBadRequest("Add at least one outlet.");
+      if (!outletId) return rollbackAndBadRequest("Add at least one outlet.", "ADD_AT_LEAST_ONE_OUTLET");
 
       outlet = outlet ?? ((await Outlet.findById(outletId).lean()) as LeanOutlet | null);
-      if (!outlet || outlet.status === "archived") return rollbackAndBadRequest("The selected outlet is not valid.");
+      if (!outlet || outlet.status === "archived") return rollbackAndBadRequest("The selected outlet is not valid.", "OUTLET_NOT_VALID");
 
       const existingQty = await usedTicketsForOutlet(input.eventId, outletId);
       if (existingQty + requestedQty > event.maxTicketsPerOutlet) {
         return rollbackAndBadRequest(
           `Outlet limit exceeded for ${outlet.name}: ${pluralize(existingQty, "ticket")} already requested, maximum ${event.maxTicketsPerOutlet}.`,
+          "OUTLET_LIMIT_EXCEEDED_NAMED",
+          { outlet: outlet.name, existing: existingQty, max: event.maxTicketsPerOutlet },
         );
       }
 
@@ -154,6 +162,8 @@ export async function POST(request: Request) {
         await TicketRequest.deleteOne({ _id: ticketRequest._id });
         return rollbackAndBadRequest(
           `Outlet limit exceeded for ${outlet.name}: another request was submitted at the same time. Maximum ${pluralize(event.maxTicketsPerOutlet, "ticket")} per outlet.`,
+          "OUTLET_LIMIT_EXCEEDED_CONCURRENT_NAMED",
+          { outlet: outlet.name, max: event.maxTicketsPerOutlet },
         );
       }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { languages, translations, type Language } from "./translations";
+import { LANGUAGE_STORAGE_KEY, languages, type Language } from "./translations";
+import { translate } from "./translate";
 
-const STORAGE_KEY = "bth-language";
+const STORAGE_KEY = LANGUAGE_STORAGE_KEY;
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -35,17 +36,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, next);
   }, []);
 
-  const t = useCallback<TranslateFn>(
-    (key, params) => {
-      const template = translations[language][key] ?? translations.en[key] ?? key;
-      if (!params) return template;
-      return Object.entries(params).reduce(
-        (result, [paramKey, paramValue]) => result.replaceAll(`{{${paramKey}}}`, String(paramValue)),
-        template,
-      );
-    },
-    [language],
-  );
+  const t = useCallback<TranslateFn>((key, params) => translate(language, key, params), [language]);
 
   const value = useMemo(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
 

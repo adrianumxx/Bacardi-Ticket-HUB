@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     await connectDb();
     const input = eventSchema.parse(await request.json());
     if (input.status === "published" && input.ticketTypes.filter((type) => type.active).length === 0) {
-      return badRequest("Published events or festivals must have at least one active ticket type.");
+      return badRequest("Published events or festivals must have at least one active ticket type.", "EVENT_NEEDS_ACTIVE_TICKET_TYPE");
     }
     const event = await Event.create({
       ...input,

@@ -1,4 +1,4 @@
-import { badRequest, errorResponse, json } from "@/lib/api";
+import { badRequest, errorResponse, forbidden, json, notFound } from "@/lib/api";
 import { canAccessAccountManagerData, requireWorkspaceManager } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
@@ -8,6 +8,7 @@ import { renderRequestStatus } from "@/lib/labels";
 import {
   normalizeItemsForStatus,
   quantityThatConsumesLimit,
+  STATUS_QUANTITY_MESSAGES,
   usedTicketsForOutlet,
   validateStatusQuantities,
   type RuleEvent,
@@ -28,9 +29,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = updateRequestSchema.parse(await request.json());
     const current = await TicketRequest.findById(id).populate("event").populate("outlet");
-    if (!current) return json({ error: "Request not found" }, { status: 404 });
+    if (!current) return notFound("Request not found", "REQUEST_NOT_FOUND");
     if (!(await canAccessAccountManagerData(user, current.requestedBy))) {
-      return json({ error: "You can only manage requests from your assigned team." }, { status: 403 });
+      return forbidden("You can only manage requests from your assigned team.", "TEAM_ONLY_MANAGE");
     }
 
     const eventDoc = current.event as unknown as RuleEvent | null;
@@ -45,7 +46,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     // approving or rejecting a request that was already legitimately
     // submitted -- the manager must always be able to decide on it.
     const quantityStatusError = validateStatusQuantities(nextStatus, nextItems);
-    if (quantityStatusError) return badRequest(quantityStatusError);
+    if (quantityStatusError) {
+      const quantityErrorCode =
+        quantityStatusError === STATUS_QUANTITY_MESSAGES.approvedMustMatchRequested
+          ? "APPROVED_MUST_MATCH_REQUESTED"
+          : quantityStatusError === STATUS_QUANTITY_MESSAGES.partialApprovalRange
+            ? "PARTIAL_APPROVAL_RANGE"
+            : "REJECTED_MUST_HAVE_ZERO_APPROVED";
+      return badRequest(quantityStatusError, quantityErrorCode);
+    }
 
     // Rejecting never consumes the outlet limit, so it never needs the
     // linked event/outlet to still exist -- a manager must always be able
@@ -64,6 +73,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (existingQty + nextQty > eventDoc.maxTicketsPerOutlet) {
         return badRequest(
           `Outlet limit exceeded: ${pluralize(existingQty, "ticket")} already reserved by other requests, maximum ${eventDoc.maxTicketsPerOutlet}.`,
+          "OUTLET_LIMIT_EXCEEDED",
+          { existing: existingQty, max: eventDoc.maxTicketsPerOutlet },
         );
       }
     }
@@ -122,6 +133,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         await current.save();
         return badRequest(
           `Outlet limit exceeded: another update was made at the same time. Maximum ${pluralize(eventDoc.maxTicketsPerOutlet, "ticket")} per outlet.`,
+          "OUTLET_LIMIT_EXCEEDED_CONCURRENT",
+          { max: eventDoc.maxTicketsPerOutlet },
         );
       }
     }

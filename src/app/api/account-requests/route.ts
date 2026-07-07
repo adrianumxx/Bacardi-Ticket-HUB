@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     await connectDb();
     const limit = await rateLimit(`access:${requestIp(request)}`, 8, 60 * 60 * 1000);
-    if (limit.limited) return tooManyRequests("Too many access requests. Try again later.");
+    if (limit.limited) return tooManyRequests("Too many access requests. Try again later.", "ACCOUNT_REQUEST_RATE_LIMITED");
     const input = accountRequestSchema.parse(await request.json());
     const email = normalizeEmail(input.email);
     // Generic response used for every outcome so the endpoint can't be used to

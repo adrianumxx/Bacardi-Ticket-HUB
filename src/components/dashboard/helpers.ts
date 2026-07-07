@@ -1,5 +1,6 @@
 import type { ManagerSummary, NotificationRecord, ReportRow, RequestQuickFilter, Role, TicketRequest, Tone } from "./types";
 import type { RequestStatus } from "@/lib/labels";
+import { getStoredLanguage, translate } from "@/lib/i18n/translate";
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -148,8 +149,18 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     headers: init?.body instanceof FormData ? init.headers : { "content-type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(payload.error || "Request failed");
+    const payload = await response.json().catch(() => null);
+    if (!payload) {
+      const language = getStoredLanguage();
+      const fallbackKey = response.status === 401 || response.status === 403 ? "api.FORBIDDEN" : response.status === 404 ? "api.NOT_FOUND" : "api.SERVER_ERROR";
+      throw new Error(translate(language, fallbackKey));
+    }
+    const language = getStoredLanguage();
+    const translated = payload.code ? translate(language, `api.${payload.code}`, payload.params) : undefined;
+    // Only trust the translation if that code actually resolved to something
+    // other than the raw key, otherwise fall back to the server's English text.
+    const message = translated && translated !== `api.${payload.code}` ? translated : payload.error || "Request failed";
+    throw new Error(message);
   }
   return response.json() as Promise<T>;
 }

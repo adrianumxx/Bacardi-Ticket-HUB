@@ -1,4 +1,4 @@
-import { errorResponse, forbidden, json } from "@/lib/api";
+import { badRequest, errorResponse, forbidden, json, notFound } from "@/lib/api";
 import { canAccessAccountManagerData, canManageWorkspace, requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { TicketRequest } from "@/lib/models";
@@ -34,37 +34,38 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const files = formData.getAll("files").filter((file): file is File => file instanceof File);
 
     if (files.length === 0) {
-      return json({ error: "Attach at least one ticket file before sending." }, { status: 400 });
+      return badRequest("Attach at least one ticket file before sending.", "ATTACH_AT_LEAST_ONE_FILE");
     }
     if (files.length > MAX_FILES) {
-      return json({ error: `Attach at most ${MAX_FILES} ticket files.` }, { status: 400 });
+      return badRequest(`Attach at most ${MAX_FILES} ticket files.`, "ATTACH_MAX_FILES", { max: MAX_FILES });
     }
     const invalidFile = files.find((file) => !ALLOWED_EXTENSIONS.includes(fileExtension(file.name)));
     if (invalidFile) {
-      return json(
-        { error: `File type not allowed: ${invalidFile.name}. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.` },
-        { status: 400 },
+      return badRequest(
+        `File type not allowed: ${invalidFile.name}. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.`,
+        "FILE_TYPE_NOT_ALLOWED",
+        { file: invalidFile.name, allowed: ALLOWED_EXTENSIONS.join(", ") },
       );
     }
     const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_TOTAL_BYTES) {
-      return json({ error: "Ticket files exceed the 15 MB total size limit." }, { status: 400 });
+      return badRequest("Ticket files exceed the 15 MB total size limit.", "FILES_EXCEED_SIZE_LIMIT");
     }
 
     const ticketRequest = await TicketRequest.findById(id).populate("event").populate("outlet");
-    if (!ticketRequest) return json({ error: "Request not found" }, { status: 404 });
+    if (!ticketRequest) return notFound("Request not found", "REQUEST_NOT_FOUND");
     if (canManageWorkspace(user.role)) {
       if (!(await canAccessAccountManagerData(user, ticketRequest.requestedBy))) {
-        return forbidden("You can only send ticket files for requests from your assigned team.");
+        return forbidden("You can only send ticket files for requests from your assigned team.", "TEAM_ONLY_SEND_TICKETS");
       }
     } else if (ticketRequest.requestedBy !== user.email) {
-      return forbidden("You can only send ticket files for your own requests.");
+      return forbidden("You can only send ticket files for your own requests.", "OWN_REQUEST_ONLY_SEND_TICKETS");
     }
     if (!["approved", "partially_approved"].includes(ticketRequest.status)) {
-      return json({ error: "Approve or partially approve the request before sending ticket files." }, { status: 400 });
+      return badRequest("Approve or partially approve the request before sending ticket files.", "APPROVE_BEFORE_SENDING");
     }
     if (approvedQuantity(ticketRequest.items) <= 0) {
-      return json({ error: "Approve at least one ticket before sending ticket files." }, { status: 400 });
+      return badRequest("Approve at least one ticket before sending ticket files.", "APPROVE_AT_LEAST_ONE_BEFORE_SENDING");
     }
 
     const attachments = await Promise.all(
