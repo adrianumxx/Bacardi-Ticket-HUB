@@ -1,4 +1,4 @@
-import { errorResponse, json } from "@/lib/api";
+import { errorResponse, json, notFound } from "@/lib/api";
 import { requireSuperAdmin } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
 import { AccountRequest, AllowedUser, Profile } from "@/lib/models";
@@ -14,7 +14,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = reviewAccountRequestSchema.parse(await request.json());
     const accountRequest = await AccountRequest.findById(id);
-    if (!accountRequest) return json({ error: "Access request not found." }, { status: 404 });
+    if (!accountRequest) return notFound("Access request not found.", "ACCOUNT_REQUEST_NOT_FOUND");
 
     accountRequest.status = input.status;
     accountRequest.reviewedBy = user.email;

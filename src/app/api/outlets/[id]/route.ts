@@ -12,7 +12,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = outletSchema.partial().parse(await request.json());
     const outlet = await Outlet.findByIdAndUpdate(id, { $set: input }, { new: true }).lean();
-    if (!outlet) return badRequest("Outlet not found.");
+    if (!outlet) return badRequest("Outlet not found.", "OUTLET_NOT_FOUND");
     await auditLog({ actor: user.email, action: "outlet.updated", target: id, payload: input });
     return json({ outlet });
   } catch (error) {
@@ -26,10 +26,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await connectDb();
     const { id } = await context.params;
     const { targetOutletId } = outletMergeSchema.parse(await request.json());
-    if (!targetOutletId || targetOutletId === id) return badRequest("Select a different target outlet for merge.");
+    if (!targetOutletId || targetOutletId === id) return badRequest("Select a different target outlet for merge.", "SELECT_DIFFERENT_MERGE_TARGET");
 
     const [source, target] = await Promise.all([Outlet.findById(id), Outlet.findById(targetOutletId)]);
-    if (!source || !target) return badRequest("Source or target outlet not found.");
+    if (!source || !target) return badRequest("Source or target outlet not found.", "MERGE_OUTLETS_NOT_FOUND");
 
     const result = await TicketRequest.updateMany({ outlet: source._id }, { $set: { outlet: target._id } });
     source.status = "archived";

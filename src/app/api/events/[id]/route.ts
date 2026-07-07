@@ -12,14 +12,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = eventSchema.partial().parse(await request.json());
     if (input.status === "published" && input.ticketTypes && input.ticketTypes.filter((type) => type.active).length === 0) {
-      return badRequest("Published events or festivals must have at least one active ticket type.");
+      return badRequest("Published events or festivals must have at least one active ticket type.", "EVENT_NEEDS_ACTIVE_TICKET_TYPE");
     }
     const update = Object.fromEntries(Object.entries({
       ...input,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
     }).filter(([, value]) => value !== undefined));
     const event = await Event.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
-    if (!event) return badRequest("Event or festival not found.");
+    if (!event) return badRequest("Event or festival not found.", "EVENT_NOT_FOUND");
     await auditLog({ actor: user.email, action: "event.updated", target: id, payload: update });
     return json({ event });
   } catch (error) {
@@ -34,7 +34,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const { id } = await context.params;
 
     const event = await Event.findById(id).lean<{ _id: unknown; name: string } | null>();
-    if (!event) return badRequest("Event or festival not found.");
+    if (!event) return badRequest("Event or festival not found.", "EVENT_NOT_FOUND");
 
     // A manager can always delete an event, even if ticket requests still
     // reference it. Those requests aren't deleted or hidden -- they keep

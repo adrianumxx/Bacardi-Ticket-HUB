@@ -44,7 +44,13 @@ const providers: NextAuthOptions["providers"] = [
 export const authOptions: NextAuthOptions = {
   providers,
   secret: process.env.NEXTAUTH_SECRET,
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    // Keep users signed in across visits instead of forcing a re-login every
+    // session -- explicit here so it doesn't depend on next-auth's defaults.
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // re-issue the session cookie once a day of activity
+  },
   pages: { signIn: "/" },
   callbacks: {
     async signIn({ user }) {
@@ -63,17 +69,30 @@ export const authOptions: NextAuthOptions = {
     },
     async jwt({ token }) {
       if (token.email) {
-        const profile = await ensureAllowedProfile(String(token.email), String(token.name || ""));
-        if (profile) {
-          token.id = String(profile._id);
-          token.role = profile.role;
-          token.status = profile.status;
-          token.officialEmail = profile.officialEmail || "";
-          token.preferredEmailApp = profile.preferredEmailApp || "default";
-          // Keep the session's display name in sync with Settings updates:
-          // ensureAllowedProfile never overwrites an existing name, so the DB
-          // value here always reflects the latest save.
-          if (profile.name) token.name = profile.name;
+        try {
+          const profile = await ensureAllowedProfile(String(token.email), String(token.name || ""));
+          if (profile) {
+            token.id = String(profile._id);
+            token.role = profile.role;
+            token.status = profile.status;
+            token.officialEmail = profile.officialEmail || "";
+            token.preferredEmailApp = profile.preferredEmailApp || "default";
+            // Keep the session's display name in sync with Settings updates:
+            // ensureAllowedProfile never overwrites an existing name, so the DB
+            // value here always reflects the latest save.
+            if (profile.name) token.name = profile.name;
+          }
+        } catch (error) {
+          // A transient DB hiccup while refreshing the token must not sign
+          // the user out -- keep whatever role/status the token already has
+          // and let API routes re-check access against the DB directly
+          // (see authz.ts) on the next request. Only the initial sign-in and
+          // every API call enforce access; this refresh is just a cache.
+          console.error("[auth:jwt-refresh-failed]", {
+            email: token.email,
+            name: error instanceof Error ? error.name : "UnknownError",
+            message: error instanceof Error ? error.message : "Token refresh failed.",
+          });
         }
       }
       return token;

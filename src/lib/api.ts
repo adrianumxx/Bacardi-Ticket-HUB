@@ -21,20 +21,22 @@ export function errorResponse(error: unknown) {
   return NextResponse.json({ error: "Unexpected server error. Please try again.", code: "SERVER_ERROR" }, { status: 500 });
 }
 
-export function badRequest(message: string, code = "BAD_REQUEST") {
-  return NextResponse.json({ error: message, code }, { status: 400 });
+type ErrorParams = Record<string, string | number>;
+
+export function badRequest(message: string, code = "BAD_REQUEST", params?: ErrorParams) {
+  return NextResponse.json({ error: message, code, ...(params ? { params } : {}) }, { status: 400 });
 }
 
-export function forbidden(message = "Forbidden") {
-  return NextResponse.json({ error: message, code: "FORBIDDEN" }, { status: 403 });
+export function forbidden(message = "Forbidden", code = "FORBIDDEN", params?: ErrorParams) {
+  return NextResponse.json({ error: message, code, ...(params ? { params } : {}) }, { status: 403 });
 }
 
-export function notFound(message = "Not found") {
-  return NextResponse.json({ error: message, code: "NOT_FOUND" }, { status: 404 });
+export function notFound(message = "Not found", code = "NOT_FOUND", params?: ErrorParams) {
+  return NextResponse.json({ error: message, code, ...(params ? { params } : {}) }, { status: 404 });
 }
 
-export function tooManyRequests(message = "Too many requests. Try again later.") {
-  return NextResponse.json({ error: message, code: "RATE_LIMITED" }, { status: 429 });
+export function tooManyRequests(message = "Too many requests. Try again later.", code = "RATE_LIMITED", params?: ErrorParams) {
+  return NextResponse.json({ error: message, code, ...(params ? { params } : {}) }, { status: 429 });
 }
 
 export function serializeDoc<T>(doc: T): T {

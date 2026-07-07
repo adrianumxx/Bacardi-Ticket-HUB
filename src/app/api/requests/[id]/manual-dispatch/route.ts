@@ -1,4 +1,4 @@
-import { errorResponse, forbidden, json } from "@/lib/api";
+import { badRequest, errorResponse, forbidden, json, notFound } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
 import { canAccessAccountManagerData, canManageWorkspace, requireUser } from "@/lib/authz";
 import { connectDb } from "@/lib/db";
@@ -13,20 +13,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const { id } = await context.params;
     const input = manualDispatchSchema.parse(await request.json());
     const ticketRequest = await TicketRequest.findById(id).populate("event").populate("outlet");
-    if (!ticketRequest) return json({ error: "Request not found" }, { status: 404 });
+    if (!ticketRequest) return notFound("Request not found", "REQUEST_NOT_FOUND");
 
     if (canManageWorkspace(user.role)) {
       if (!(await canAccessAccountManagerData(user, ticketRequest.requestedBy))) {
-        return forbidden("You can only record ticket dispatches for requests from your assigned team.");
+        return forbidden("You can only record ticket dispatches for requests from your assigned team.", "TEAM_ONLY_MANUAL_DISPATCH");
       }
     } else if (ticketRequest.requestedBy !== user.email) {
-      return forbidden("You can only record ticket dispatches for your own requests.");
+      return forbidden("You can only record ticket dispatches for your own requests.", "OWN_REQUEST_ONLY_MANUAL_DISPATCH");
     }
     if (!["approved", "partially_approved"].includes(ticketRequest.status)) {
-      return json({ error: "Approve or partially approve the request before opening an email draft." }, { status: 400 });
+      return badRequest("Approve or partially approve the request before opening an email draft.", "APPROVE_BEFORE_DRAFT");
     }
     if (approvedQuantity(ticketRequest.items) <= 0) {
-      return json({ error: "Approve at least one ticket before recording a manual dispatch." }, { status: 400 });
+      return badRequest("Approve at least one ticket before recording a manual dispatch.", "APPROVE_AT_LEAST_ONE_BEFORE_DISPATCH");
     }
 
     ticketRequest.dispatches.push({
