@@ -84,7 +84,7 @@ export function LoginScreen() {
             <ActionButton
               type="button"
               variant={mode === "signin" ? "primary" : "ghost"}
-              className="min-h-10 w-full text-xs uppercase tracking-[0.16em]"
+              className="min-h-10 w-full min-w-0 !whitespace-normal text-center text-[11px] uppercase leading-tight tracking-[0.08em] sm:text-xs sm:tracking-[0.16em]"
               onClick={() => {
                 setMode("signin");
                 setError("");
@@ -96,7 +96,7 @@ export function LoginScreen() {
             <ActionButton
               type="button"
               variant={mode === "request" ? "primary" : "ghost"}
-              className="min-h-10 w-full text-xs uppercase tracking-[0.16em]"
+              className="min-h-10 w-full min-w-0 !whitespace-normal text-center text-[11px] uppercase leading-tight tracking-[0.08em] sm:text-xs sm:tracking-[0.16em]"
               onClick={() => {
                 setMode("request");
                 setError("");
